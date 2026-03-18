@@ -10,11 +10,19 @@ import { SideMenu } from "../components/SideMenu";
 
 export function Home() {
   const navigate = useNavigate();
-  const [showWelcome, setShowWelcome] = useState(true);
+  // Check localStorage to see if user has already dismissed the welcome screen
+  const [showWelcome, setShowWelcome] = useState(() => {
+    return localStorage.getItem("hasSeenWelcome") !== "true";
+  });
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const handleStart = () => {
+    setShowWelcome(false);
+    localStorage.setItem("hasSeenWelcome", "true");
+  };
+
   if (showWelcome) {
-    return <WelcomeScreen onStart={() => setShowWelcome(false)} />;
+    return <WelcomeScreen onStart={handleStart} />;
   }
 
   return (
@@ -27,7 +35,7 @@ export function Home() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-pink-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-        
+
         {/* Subtle stars */}
         {Array.from({ length: 30 }).map((_, i) => (
           <motion.div
@@ -91,74 +99,18 @@ export function Home() {
         </div>
       </div>
 
-      {/* Main Content - 3 Column Layout */}
+      {/* Main Content - Solo Chat */}
       <div className="relative h-full pt-[73px] max-w-[2000px] mx-auto">
-        <div className="h-full grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-0">
-          {/* Left Sidebar - Insights */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="hidden lg:block border-r border-white/10 bg-white/5 backdrop-blur-sm"
-          >
-            <InsightsSidebar />
-          </motion.div>
-
-          {/* Center - AI Chat */}
+        <div className="h-full flex flex-col">
+          {/* Centered AI Chat taking full width/height */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="relative"
+            className="flex-1 relative"
           >
             <AIChat />
           </motion.div>
-
-          {/* Right Sidebar - Agenda */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4 }}
-            className="hidden lg:block border-l border-white/10 bg-white/5 backdrop-blur-sm"
-          >
-            <AgendaSidebar />
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Mobile Navigation - Bottom */}
-      <div className="lg:hidden absolute bottom-0 left-0 right-0 z-30">
-        <div className="bg-white/5 backdrop-blur-xl border-t border-white/10">
-          <div className="px-6 py-3 flex items-center justify-around">
-            <button
-              onClick={() => navigate("/community")}
-              className="flex flex-col items-center gap-1 p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <span className="text-2xl">📸</span>
-              <span className="text-xs text-gray-400">Comunidad</span>
-            </button>
-            <button
-              onClick={() => navigate("/calendar")}
-              className="flex flex-col items-center gap-1 p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <span className="text-2xl">📅</span>
-              <span className="text-xs text-gray-400">Agenda</span>
-            </button>
-            <button
-              onClick={() => navigate("/itineraries")}
-              className="flex flex-col items-center gap-1 p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <span className="text-2xl">✈️</span>
-              <span className="text-xs text-gray-400">Viajes</span>
-            </button>
-            <button
-              onClick={() => navigate("/favorites")}
-              className="flex flex-col items-center gap-1 p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <span className="text-2xl">❤️</span>
-              <span className="text-xs text-gray-400">Favoritos</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
