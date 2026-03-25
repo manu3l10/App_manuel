@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { supabase } from "../../lib/supabase";
 
 interface TripEvent {
   id: number;
@@ -16,30 +17,7 @@ export function Calendar() {
   const navigate = useNavigate();
   const { lang, t } = useLanguage();
   const [currentDate, setCurrentDate] = useState(new Date());
-
-  const upcomingTrips: TripEvent[] = [
-    {
-      id: 1,
-      destination: "París, Francia",
-      dates: "15-20 Marzo",
-      image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "blue",
-    },
-    {
-      id: 2,
-      destination: "Tokio, Japón",
-      dates: "5-12 Abril",
-      image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "cyan",
-    },
-    {
-      id: 3,
-      destination: "Barcelona, España",
-      dates: "20-25 Mayo",
-      image: "https://images.unsplash.com/photo-1741304787559-a392853b613b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjBnYXVkaXxlbnwxfHx8fDE3NzM3MTY5NjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "indigo",
-    },
-  ];
+  const [upcomingTrips, setUpcomingTrips] = useState<TripEvent[]>([]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -58,7 +36,7 @@ export function Calendar() {
   const firstDayOffset = getFirstDayOffset(year, month);
 
   // Days with trips (for highlighting) - only for demonstration month
-  const tripDays = month === 2 ? [15, 16, 17, 18, 19, 20] : [];
+  const tripDays: number[] = [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50">
@@ -66,7 +44,7 @@ export function Calendar() {
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { openMenu: true } })}
             className="p-2 hover:bg-blue-100/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-6 h-6 text-slate-700" />
@@ -131,10 +109,10 @@ export function Calendar() {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                   className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${hasTrip
-                      ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-lg"
-                      : isToday
-                        ? "bg-blue-100 text-blue-900 border-2 border-blue-500"
-                        : "hover:bg-slate-100 text-slate-700"
+                    ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-lg"
+                    : isToday
+                      ? "bg-blue-100 text-blue-900 border-2 border-blue-500"
+                      : "hover:bg-slate-100 text-slate-700"
                     }`}
                 >
                   {day}

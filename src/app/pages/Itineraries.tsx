@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { supabase } from "../../lib/supabase";
 
 interface SavedItinerary {
   id: number;
@@ -15,47 +16,48 @@ interface SavedItinerary {
 
 export function Itineraries() {
   const navigate = useNavigate();
-  const [itineraries, setItineraries] = useState<SavedItinerary[]>([
-    {
-      id: 1,
-      destination: "París, Francia",
-      dates: "15-20 Marzo 2026",
-      budget: "$1,500 - $2,000",
-      image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.8,
-      saved: true,
-    },
-    {
-      id: 2,
-      destination: "Tokio, Japón",
-      dates: "5-12 Abril 2026",
-      budget: "$2,000 - $2,800",
-      image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.9,
-      saved: true,
-    },
-    {
-      id: 3,
-      destination: "Colombia",
-      dates: "1-8 Junio 2026",
-      budget: "$800 - $1,200",
-      image: "https://images.unsplash.com/photo-1493925410384-84f842e616fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvbWJpYSUyMGNvZmZlZSUyMG1vdW50YWluc3xlbnwxfHx8fDE3NzM4MDU2NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.7,
-      saved: true,
-    },
-    {
-      id: 4,
-      destination: "Barcelona, España",
-      dates: "20-25 Mayo 2026",
-      budget: "$1,200 - $1,800",
-      image: "https://images.unsplash.com/photo-1741304787559-a392853b613b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjBnYXVkaXxlbnwxfHx8fDE3NzM3MTY5NjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.6,
-      saved: true,
-    },
-  ]);
+  const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const deleteItinerary = (id: number) => {
-    setItineraries(itineraries.filter((item) => item.id !== id));
+  const fetchItineraries = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('trips')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching itineraries:", error);
+    } else {
+      const mappedData = data.map((item: any) => ({
+        id: item.id,
+        destination: item.destination,
+        dates: `${item.start_date} - ${item.end_date}`,
+        budget: item.budget,
+        image: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZHZlbnR1cmUlMjB0cmF2ZWx8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+        rating: 4.5,
+        saved: true
+      }));
+      setItineraries(mappedData);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchItineraries();
+  }, []);
+
+  const deleteItinerary = async (id: number) => {
+    const { error } = await supabase
+      .from('trips')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting itinerary:", error);
+    } else {
+      setItineraries(itineraries.filter((item) => item.id !== id));
+    }
   };
 
   return (
@@ -64,7 +66,7 @@ export function Itineraries() {
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { openMenu: true } })}
             className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -82,7 +84,7 @@ export function Itineraries() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg"
           >
-            <p className="text-2xl font-semibold">{itineraries.length}</p>
+            <p className="text-2xl font-semibold">{loading ? "..." : itineraries.length}</p>
             <p className="text-sm opacity-90">Itinerarios</p>
           </motion.div>
           <motion.div
@@ -91,7 +93,7 @@ export function Itineraries() {
             transition={{ delay: 0.1 }}
             className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl p-4 text-white shadow-lg"
           >
-            <p className="text-2xl font-semibold">12</p>
+            <p className="text-2xl font-semibold">0</p>
             <p className="text-sm opacity-90">Destinos</p>
           </motion.div>
           <motion.div
@@ -100,7 +102,7 @@ export function Itineraries() {
             transition={{ delay: 0.2 }}
             className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg"
           >
-            <p className="text-2xl font-semibold">45</p>
+            <p className="text-2xl font-semibold">0</p>
             <p className="text-sm opacity-90">Días viajados</p>
           </motion.div>
         </div>
@@ -123,7 +125,7 @@ export function Itineraries() {
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                
+
                 {/* Delete button */}
                 <motion.button
                   whileHover={{ scale: 1.1 }}

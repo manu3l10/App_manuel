@@ -72,7 +72,7 @@ export function Settings() {
       <div className="sticky top-0 z-30 bg-slate-950/40 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { openMenu: true } })}
             className="p-2 hover:bg-white/5 active:scale-95 rounded-lg transition-all"
           >
             <ArrowLeft className="w-6 h-6 text-white/80" />

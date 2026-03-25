@@ -1,42 +1,78 @@
-import { motion } from "motion/react";
-import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut, Loader2, X, User, FileText } from "lucide-react";
 import { useNavigate } from "react-router";
+import { supabase } from "../../lib/supabase";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export function Profile() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const [user, setUser] = useState<any>(null);
+  const [tripCount, setTripCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [recentTrips, setRecentTrips] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [bioInput, setBioInput] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+
+    if (user) {
+      setNameInput(user.user_metadata?.full_name || user.email?.split('@')[0] || "");
+      setBioInput(user.user_metadata?.bio || "✈️ Amante de los viajes y las aventuras. Explorando el mundo un destino a la vez 🌍");
+
+      const { count, data: tripsData } = await supabase
+        .from('trips')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      setTripCount(count || 0);
+      setRecentTrips(tripsData || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        full_name: nameInput,
+        bio: bioInput
+      }
+    });
+
+    if (error) {
+      alert("Error actualizando perfil: " + error.message);
+    } else {
+      setUser(data.user);
+      setIsEditing(false);
+    }
+    setSaving(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+    window.location.reload();
+  };
 
   const stats = [
-    { label: "Países visitados", value: "12", icon: MapPin },
-    { label: "Viajes realizados", value: "28", icon: Calendar },
-    { label: "Insignias", value: "15", icon: Award },
+    { label: "Países visitados", value: "0", icon: MapPin },
+    { label: "Viajes realizados", value: loading ? "..." : tripCount.toString(), icon: Calendar },
+    { label: "Insignias", value: "0", icon: Award },
   ];
 
-  const badges = [
-    { name: "Viajero Frecuente", icon: "✈️", color: "from-purple-500 to-purple-600" },
-    { name: "Explorador", icon: "🗺️", color: "from-blue-500 to-blue-600" },
-    { name: "Foodie", icon: "🍕", color: "from-orange-500 to-orange-600" },
-    { name: "Aventurero", icon: "🏔️", color: "from-green-500 to-green-600" },
-    { name: "Fotógrafo", icon: "📸", color: "from-pink-500 to-pink-600" },
-    { name: "Culturalista", icon: "🎭", color: "from-indigo-500 to-indigo-600" },
-  ];
-
-  const recentTrips = [
-    {
-      destination: "París, Francia",
-      date: "Marzo 2026",
-      image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    },
-    {
-      destination: "Tokio, Japón",
-      date: "Febrero 2026",
-      image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    },
-    {
-      destination: "Colombia",
-      date: "Enero 2026",
-      image: "https://images.unsplash.com/photo-1493925410384-84f842e616fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvbWJpYSUyMGNvZmZlZSUyMG1vdW50YWluc3xlbnwxfHx8fDE3NzM4MDU2NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    },
-  ];
+  const badges: any[] = [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
@@ -44,17 +80,102 @@ export function Profile() {
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { openMenu: true } })}
             className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="font-semibold text-gray-900">Perfil</h1>
-          <button className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
+          >
             <Edit className="w-5 h-5 text-gray-700" />
           </button>
         </div>
       </div>
+
+      {/* Editing Modal */}
+      <AnimatePresence>
+        {isEditing && (
+          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !saving && setIsEditing(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="relative w-full max-w-lg bg-white rounded-t-[32px] md:rounded-[32px] p-6 md:p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">Configuración Perfil</h2>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  disabled={saving}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Form Group: Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-500 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    NOMBRE DE USUARIO
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Tu nombre"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-4 px-4 text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-purple-400/50 transition-all"
+                  />
+                </div>
+
+                {/* Form Group: Bio */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-500 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    TU BIOGRAFÍA
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="Cuéntanos sobre tus aventuras..."
+                    value={bioInput}
+                    onChange={(e) => setBioInput(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-4 px-4 text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-purple-400/50 transition-all resize-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-4 flex flex-col gap-3">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : "Guardar Cambios"}
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    disabled={saving}
+                    className="w-full py-4 bg-gray-50 text-gray-500 rounded-2xl font-bold hover:bg-gray-100 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Profile Header */}
@@ -67,20 +188,25 @@ export function Profile() {
             {/* Avatar */}
             <div className="relative mb-4">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-3xl font-semibold">
-                V
+                {user?.user_metadata?.full_name?.[0].toUpperCase() || user?.email?.[0].toUpperCase() || "V"}
               </div>
-              <button className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-purple-200 hover:bg-purple-50 transition-colors">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-purple-200 hover:bg-purple-50 transition-colors"
+              >
                 <Camera className="w-4 h-4 text-purple-600" />
               </button>
             </div>
 
             {/* Name */}
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">Viajero Apasionado</h2>
-            <p className="text-gray-600 mb-4">@traveler</p>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-1">
+              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('menu.user')}
+            </h2>
+            <p className="text-gray-600 mb-4">{user?.email || "@traveler"}</p>
 
             {/* Bio */}
-            <p className="text-gray-700 max-w-md mb-6">
-              ✈️ Amante de los viajes y las aventuras. Explorando el mundo un destino a la vez 🌍
+            <p className="text-gray-700 max-w-md mb-6 leading-relaxed">
+              {user?.user_metadata?.bio || "✈️ Amante de los viajes y las aventuras. Explorando el mundo un destino a la vez 🌍"}
             </p>
 
             {/* Stats */}
@@ -106,60 +232,64 @@ export function Profile() {
         </motion.div>
 
         {/* Badges */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
-        >
-          <h3 className="font-semibold text-gray-900 mb-4">Insignias</h3>
-          <div className="grid grid-cols-3 gap-3">
-            {badges.map((badge, index) => (
-              <motion.div
-                key={badge.name}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 + index * 0.05 }}
-                className={`bg-gradient-to-br ${badge.color} rounded-xl p-4 text-center text-white shadow-lg`}
-              >
-                <div className="text-3xl mb-2">{badge.icon}</div>
-                <p className="text-xs font-medium">{badge.name}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+        {badges.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
+          >
+            <h3 className="font-semibold text-gray-900 mb-4">Insignias</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {badges.map((badge, index) => (
+                <motion.div
+                  key={badge.name}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 + index * 0.05 }}
+                  className={`bg-gradient-to-br ${badge.color} rounded-xl p-4 text-center text-white shadow-lg`}
+                >
+                  <div className="text-3xl mb-2">{badge.icon}</div>
+                  <p className="text-xs font-medium">{badge.name}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Recent Trips */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
-        >
-          <h3 className="font-semibold text-gray-900 mb-4">Viajes Recientes</h3>
-          <div className="grid grid-cols-3 gap-3">
-            {recentTrips.map((trip, index) => (
-              <motion.div
-                key={trip.destination}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 + index * 0.1 }}
-                className="group cursor-pointer"
-              >
-                <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
-                  <img
-                    src={trip.image}
-                    alt={trip.destination}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-                <p className="text-sm font-medium text-gray-900">{trip.destination}</p>
-                <p className="text-xs text-gray-500">{trip.date}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+        {recentTrips.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
+          >
+            <h3 className="font-semibold text-gray-900 mb-4">Viajes Recientes</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {recentTrips.map((trip, index) => (
+                <motion.div
+                  key={trip.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="group cursor-pointer"
+                >
+                  <div className="relative aspect-square rounded-xl overflow-hidden mb-2">
+                    <img
+                      src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZHZlbnR1cmUlMjB0cmF2ZWx8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080"
+                      alt={trip.destination}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{trip.destination}</p>
+                  <p className="text-xs text-gray-500">{trip.start_date}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Actions */}
         <motion.div
@@ -168,10 +298,17 @@ export function Profile() {
           transition={{ delay: 0.6 }}
           className="space-y-3"
         >
-          <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-medium hover:shadow-lg transition-shadow">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-medium hover:shadow-lg transition-shadow flex items-center justify-center gap-2"
+          >
+            <Edit className="w-5 h-5" />
             Editar Perfil
           </button>
-          <button className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-white transition-colors">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-white transition-colors"
+          >
             <LogOut className="w-5 h-5" />
             Cerrar sesión
           </button>

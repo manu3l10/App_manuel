@@ -21,57 +21,12 @@ export function Favorites() {
   const [favorites, setFavorites] = useState<Favorite[]>([
     {
       id: 1,
-      name: "Torre Eiffel",
-      location: "París, Francia",
+      name: "Explora Destinos",
+      location: "Recomendado para ti",
       type: "destination",
-      image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.9,
-      description: "Símbolo icónico de París",
-    },
-    {
-      id: 2,
-      name: "Le Grand Hotel",
-      location: "París, Francia",
-      type: "hotel",
-      image: "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMHJvb218ZW58MXx8fHwxNzczNzIxNzU3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.8,
-      description: "Hotel de lujo en el centro",
-    },
-    {
-      id: 3,
-      name: "Tokio Nightlife",
-      location: "Tokio, Japón",
-      type: "destination",
-      image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.9,
-      description: "Experiencia urbana única",
-    },
-    {
-      id: 4,
-      name: "Le Petit Bistro",
-      location: "París, Francia",
-      type: "restaurant",
-      image: "https://images.unsplash.com/photo-1717158776685-d4b7c346e1a7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwZm9vZCUyMHBsYXR0ZXJ8ZW58MXx8fHwxNzczNjg1NDc2fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.7,
-      description: "Auténtica cocina francesa",
-    },
-    {
-      id: 5,
-      name: "Eje Cafetero",
-      location: "Colombia",
-      type: "destination",
-      image: "https://images.unsplash.com/photo-1493925410384-84f842e616fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvbWJpYSUyMGNvZmZlZSUyMG1vdW50YWluc3xlbnwxfHx8fDE3NzM4MDU2NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.8,
-      description: "Montañas y café excepcional",
-    },
-    {
-      id: 6,
-      name: "Sagrada Familia",
-      location: "Barcelona, España",
-      type: "destination",
-      image: "https://images.unsplash.com/photo-1741304787559-a392853b613b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjBnYXVkaXxlbnwxfHx8fDE3NzM3MTY5NjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      rating: 4.9,
-      description: "Obra maestra de Gaudí",
+      image: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=1000",
+      rating: 5.0,
+      description: "Próximamente verás aquí tus lugares favoritos recomendados por la IA.",
     },
   ]);
 
@@ -98,7 +53,7 @@ export function Favorites() {
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/", { state: { openMenu: true } })}
             className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -114,22 +69,20 @@ export function Favorites() {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setFilter("all")}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              filter === "all"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                : "bg-white/80 text-gray-700 hover:bg-white"
-            }`}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "all"
+              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+              : "bg-white/80 text-gray-700 hover:bg-white"
+              }`}
           >
             Todos ({favorites.length})
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setFilter("destination")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              filter === "destination"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                : "bg-white/80 text-gray-700 hover:bg-white"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "destination"
+              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+              : "bg-white/80 text-gray-700 hover:bg-white"
+              }`}
           >
             <Plane className="w-4 h-4" />
             Destinos ({favorites.filter((f) => f.type === "destination").length})
@@ -137,11 +90,10 @@ export function Favorites() {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setFilter("hotel")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              filter === "hotel"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                : "bg-white/80 text-gray-700 hover:bg-white"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "hotel"
+              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+              : "bg-white/80 text-gray-700 hover:bg-white"
+              }`}
           >
             <Hotel className="w-4 h-4" />
             Hoteles ({favorites.filter((f) => f.type === "hotel").length})
@@ -149,11 +101,10 @@ export function Favorites() {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setFilter("restaurant")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              filter === "restaurant"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                : "bg-white/80 text-gray-700 hover:bg-white"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "restaurant"
+              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+              : "bg-white/80 text-gray-700 hover:bg-white"
+              }`}
           >
             <Utensils className="w-4 h-4" />
             Restaurantes ({favorites.filter((f) => f.type === "restaurant").length})

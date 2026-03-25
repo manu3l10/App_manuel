@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Menu, Settings, Bell } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 import { AIChat } from "../components/AIChat";
 import { SideMenu } from "../components/SideMenu";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { supabase } from "../../lib/supabase";
 
 export function Home() {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export function Home() {
   const { t } = useLanguage();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -32,15 +34,43 @@ export function Home() {
     };
   }, []);
 
-  // Check localStorage to see if user has already dismissed the welcome screen
-  const [showWelcome, setShowWelcome] = useState(() => {
-    return localStorage.getItem("hasSeenWelcome") !== "true";
-  });
+  const [showWelcome, setShowWelcome] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.openMenu) {
+      setMenuOpen(true);
+      // Optional: clear state to avoid reopening on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setShowWelcome(false);
+        setUser(session.user);
+      }
+    };
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (session) {
+        setShowWelcome(false);
+        setUser(session.user);
+      } else {
+        setShowWelcome(true);
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleStart = () => {
     setShowWelcome(false);
-    localStorage.setItem("hasSeenWelcome", "true");
   };
 
   if (showWelcome) {
@@ -171,18 +201,21 @@ export function Home() {
                     >
                       <div className="p-4 border-b border-white/5 flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                          <span className="text-white text-[10px] font-bold">V</span>
+                          <span className="text-white text-[10px] font-bold">
+                            {user?.email?.[0].toUpperCase() || "V"}
+                          </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">Viajero</p>
-                          <p className="text-[10px] text-gray-500 truncate">@traveler</p>
+                          <p className="text-xs font-bold text-white truncate">
+                            {user?.email?.split('@')[0] || "Viajero"}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">{user?.email || "@traveler"}</p>
                         </div>
                       </div>
                       <div className="p-1">
                         <button
                           onClick={() => {
-                            localStorage.removeItem("hasSeenWelcome");
-                            window.location.reload();
+                            supabase.auth.signOut();
                           }}
                           className="w-full flex items-center gap-2 p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-sm font-medium"
                         >

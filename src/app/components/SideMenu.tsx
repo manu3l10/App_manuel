@@ -3,6 +3,7 @@ import { X, User, Calendar, Camera, Heart, FileText, Settings, Sparkles } from "
 import { useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { supabase } from "../../lib/supabase";
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -14,7 +15,15 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
   const [isMobile, setIsMobile] = useState(false);
   const { t } = useLanguage();
 
+  const [user, setUser] = useState<any>(null);
+
   useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    checkUser();
+
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -78,8 +87,10 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
                         <User className="w-5 h-5 md:w-6 md:h-6 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-white text-sm md:text-base">{t('menu.user')}</h3>
-                        <p className="text-[10px] md:text-xs text-gray-500">@traveler</p>
+                        <h3 className="font-bold text-white text-sm md:text-base">
+                          {user?.email?.split('@')[0] || t('menu.user')}
+                        </h3>
+                        <p className="text-[10px] md:text-xs text-gray-500">{user?.email || "@traveler"}</p>
                       </div>
                     </div>
                     <button
@@ -94,9 +105,9 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
                   {/* Stats - Simplified */}
                   <div className="grid grid-cols-3 gap-2 mt-5">
                     {[
-                      { val: "8", label: t('menu.stats.deptos') },
-                      { val: "24", label: t('menu.stats.planes') },
-                      { val: "12", label: t('menu.stats.logros') }
+                      { val: "0", label: t('menu.stats.deptos') },
+                      { val: "0", label: t('menu.stats.planes') },
+                      { val: "0", label: t('menu.stats.logros') }
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white/5 rounded-lg p-2 text-center border border-white/5">
                         <p className="text-sm font-bold text-white">{stat.val}</p>

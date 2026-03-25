@@ -6,6 +6,7 @@ import { Itineraries } from "./pages/Itineraries";
 import { Favorites } from "./pages/Favorites";
 import { Profile } from "./pages/Profile";
 import { Settings } from "./pages/Settings";
+import { SupabaseTest } from "./pages/SupabaseTest";
 
 export const router = createBrowserRouter([
   {
@@ -35,5 +36,9 @@ export const router = createBrowserRouter([
   {
     path: "/settings",
     Component: Settings,
+  },
+  {
+    path: "/test-supabase",
+    Component: SupabaseTest,
   },
 ]);
