@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Heart, MessageCircle, Bookmark, MoreHorizontal, MapPin, Plus, X, Image as ImageIcon, Send } from "lucide-react";
 import { useNavigate } from "react-router";
+import {
+  CommunityPostRecord,
+  createCommunityPost,
+  deleteCommunityPost,
+  getCurrentUserId,
+  listCommunityPosts,
+  updateCommunityPost,
+} from "../../lib/communityApi";
 
 interface Comment {
   id: number;
@@ -10,7 +18,8 @@ interface Comment {
 }
 
 interface Post {
-  id: number;
+  id: string;
+  userId: string;
   username: string;
   avatar: string;
   location: string;
@@ -21,91 +30,35 @@ interface Post {
   liked: boolean;
   saved: boolean;
   commentList: Comment[];
-  editable?: boolean;
+  editable: boolean;
 }
+
+const mapRecordToPost = (record: CommunityPostRecord, currentUserId: string | null): Post => ({
+  id: record.id,
+  userId: record.user_id,
+  username: record.author_name,
+  avatar: record.author_avatar,
+  location: record.location,
+  image: record.image_url,
+  likes: 0,
+  comments: 0,
+  caption: record.caption,
+  liked: false,
+  saved: false,
+  commentList: [],
+  editable: record.user_id === currentUserId,
+});
 
 export function Community() {
   const navigate = useNavigate();
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: 1,
-      username: "maria_travels",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Maria",
-      location: "París, Francia",
-      image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      likes: 1243,
-      comments: 89,
-      caption: "¡El atardecer en París nunca decepciona! 🗼✨ #ParisVibes #TravelGoals",
-      liked: false,
-      saved: false,
-      commentList: [
-        { id: 101, username: "viajero_col", text: "Ese cielo está brutal. París siempre gana." },
-        { id: 102, username: "ana_routes", text: "¿Desde dónde tomaste la foto?" },
-      ],
-    },
-    {
-      id: 2,
-      username: "adventure_seeker",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Adventure",
-      location: "Tokio, Japón",
-      image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      likes: 892,
-      comments: 54,
-      caption: "Las calles de Tokio de noche son pura magia 🇯🇵✨",
-      liked: true,
-      saved: false,
-      commentList: [
-        { id: 201, username: "camilo_trip", text: "Tokio de noche parece otro planeta." },
-      ],
-    },
-    {
-      id: 3,
-      username: "wanderlust_soul",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Wanderlust",
-      location: "Colombia",
-      image: "https://images.unsplash.com/photo-1493925410384-84f842e616fb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb2xvbWJpYSUyMGNvZmZlZSUyMG1vdW50YWluc3xlbnwxfHx8fDE3NzM4MDU2NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      likes: 2156,
-      comments: 134,
-      caption: "Café colombiano con estas vistas... ¡no hay nada mejor! ☕🏔️",
-      liked: false,
-      saved: true,
-      commentList: [
-        { id: 301, username: "mta_user", text: "Necesito ese plan en mi próximo viaje." },
-      ],
-    },
-    {
-      id: 4,
-      username: "romantic_voyager",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Romantic",
-      location: "Maldivas",
-      image: "https://images.unsplash.com/photo-1591625717042-3b2b55f6a388?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyb21hbnRpYyUyMGJlYWNoJTIwY291cGxlfGVufDF8fHx8MTc3Mzc2OTc5NXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      likes: 3421,
-      comments: 201,
-      caption: "Luna de miel perfecta 🌴💙 #MaldivasParadise",
-      liked: false,
-      saved: false,
-      commentList: [],
-    },
-    {
-      id: 5,
-      username: "explorer_alex",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Explorer",
-      location: "Barcelona, España",
-      image: "https://images.unsplash.com/photo-1741304787559-a392853b613b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjBnYXVkaXxlbnwxfHx8fDE3NzM3MTY5NjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      likes: 1567,
-      comments: 92,
-      caption: "La arquitectura de Gaudí es simplemente impresionante 🏛️✨",
-      liked: true,
-      saved: false,
-      commentList: [
-        { id: 501, username: "laura_mapas", text: "La Sagrada Familia es de otro nivel." },
-      ],
-    },
-  ]);
-  const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-  const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [activePostMenu, setActivePostMenu] = useState<number | null>(null);
+  const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [newPost, setNewPost] = useState({
     location: "",
@@ -113,9 +66,29 @@ export function Community() {
     image: "",
   });
 
-  const toggleLike = (id: number) => {
-    setPosts(
-      posts.map((post) =>
+  const fetchPosts = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const [userId, records] = await Promise.all([getCurrentUserId(), listCommunityPosts()]);
+      setCurrentUserId(userId);
+      setPosts(records.map((record) => mapRecordToPost(record, userId)));
+    } catch (error: any) {
+      console.error("Error loading community posts:", error);
+      setLoadError(error?.message ?? "No se pudieron cargar las publicaciones.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const toggleLike = (id: string) => {
+    setPosts((prev) =>
+      prev.map((post) =>
         post.id === id
           ? { ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 }
           : post
@@ -123,11 +96,11 @@ export function Community() {
     );
   };
 
-  const toggleSave = (id: number) => {
-    setPosts(posts.map((post) => (post.id === id ? { ...post, saved: !post.saved } : post)));
+  const toggleSave = (id: string) => {
+    setPosts((prev) => prev.map((post) => (post.id === id ? { ...post, saved: !post.saved } : post)));
   };
 
-  const addComment = (postId: number) => {
+  const addComment = (postId: string) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
 
@@ -149,6 +122,7 @@ export function Community() {
           : post
       )
     );
+
     setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
     setOpenComments((prev) => ({ ...prev, [postId]: true }));
   };
@@ -162,30 +136,28 @@ export function Community() {
     reader.readAsDataURL(file);
   };
 
-  const createPost = () => {
+  const createPost = async () => {
     const location = newPost.location.trim();
     const caption = newPost.caption.trim();
     const image = newPost.image.trim();
     if (!location || !caption || !image) return;
 
-    const post: Post = {
-      id: Date.now(),
-      username: "tu_cuenta",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Traveler",
-      location,
-      image,
-      likes: 0,
-      comments: 0,
-      caption,
-      liked: false,
-      saved: false,
-      commentList: [],
-      editable: true,
-    };
+    try {
+      const createdRecord = await createCommunityPost({ location, caption, imageUrl: image });
+      const createdPost = mapRecordToPost(createdRecord, currentUserId);
 
-    setPosts((prev) => [post, ...prev]);
-    setNewPost({ location: "", caption: "", image: "" });
-    setShowCreatePost(false);
+      setPosts((prev) => [createdPost, ...prev]);
+      setNewPost({ location: "", caption: "", image: "" });
+      setShowCreatePost(false);
+      setEditingPost(null);
+
+      if (!currentUserId) {
+        setCurrentUserId(createdRecord.user_id);
+      }
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      window.alert(error?.message ?? "No se pudo crear la publicación.");
+    }
   };
 
   const startEditPost = (post: Post) => {
@@ -199,28 +171,43 @@ export function Community() {
     setActivePostMenu(null);
   };
 
-  const saveEditedPost = () => {
+  const saveEditedPost = async () => {
     if (!editingPost) return;
+
     const location = newPost.location.trim();
     const caption = newPost.caption.trim();
     const image = newPost.image.trim();
     if (!location || !caption || !image) return;
 
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === editingPost.id
-          ? { ...post, location, caption, image }
-          : post
-      )
-    );
-    setEditingPost(null);
-    setNewPost({ location: "", caption: "", image: "" });
-    setShowCreatePost(false);
+    try {
+      const updated = await updateCommunityPost(editingPost.id, {
+        location,
+        caption,
+        imageUrl: image,
+      });
+
+      setPosts((prev) =>
+        prev.map((post) => (post.id === editingPost.id ? mapRecordToPost(updated, currentUserId) : post))
+      );
+
+      setEditingPost(null);
+      setNewPost({ location: "", caption: "", image: "" });
+      setShowCreatePost(false);
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      window.alert(error?.message ?? "No se pudo actualizar la publicación.");
+    }
   };
 
-  const deletePost = (id: number) => {
-    setPosts((prev) => prev.filter((post) => post.id !== id));
-    setActivePostMenu(null);
+  const deletePost = async (id: string) => {
+    try {
+      await deleteCommunityPost(id);
+      setPosts((prev) => prev.filter((post) => post.id !== id));
+      setActivePostMenu(null);
+    } catch (error: any) {
+      console.error("Error deleting post:", error);
+      window.alert(error?.message ?? "No se pudo eliminar la publicación.");
+    }
   };
 
   const closePostModal = () => {
@@ -231,7 +218,6 @@ export function Community() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
-      {/* Header */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
@@ -250,17 +236,35 @@ export function Community() {
         </div>
       </div>
 
-      {/* Feed */}
       <div className="max-w-2xl mx-auto pb-6">
+        {isLoading && (
+          <div className="p-8 text-center text-gray-500">Cargando publicaciones...</div>
+        )}
+
+        {!isLoading && loadError && (
+          <div className="mx-4 mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {loadError}
+            <button
+              onClick={fetchPosts}
+              className="ml-2 underline font-medium"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !loadError && posts.length === 0 && (
+          <div className="p-8 text-center text-gray-500">Aún no hay publicaciones en la comunidad.</div>
+        )}
+
         {posts.map((post, index) => (
           <motion.div
             key={post.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
+            transition={{ delay: index * 0.08 }}
             className="bg-white mb-6 border-b border-gray-100 last:border-b-0"
           >
-            {/* Post Header */}
             <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img
@@ -278,7 +282,7 @@ export function Community() {
               </div>
               <div className="relative">
                 <button
-                  onClick={() => setActivePostMenu((current) => current === post.id ? null : post.id)}
+                  onClick={() => setActivePostMenu((current) => (current === post.id ? null : post.id))}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <MoreHorizontal className="w-5 h-5 text-gray-600" />
@@ -316,12 +320,10 @@ export function Community() {
               </div>
             </div>
 
-            {/* Post Image */}
             <div className="w-full aspect-square bg-gray-100">
               <img src={post.image} alt={post.location} className="w-full h-full object-cover" />
             </div>
 
-            {/* Post Actions */}
             <div className="px-4 py-3">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-4">
@@ -356,9 +358,7 @@ export function Community() {
                 </motion.button>
               </div>
 
-              <p className="font-semibold text-sm text-gray-900 mb-1">
-                {post.likes.toLocaleString()} me gusta
-              </p>
+              <p className="font-semibold text-sm text-gray-900 mb-1">{post.likes.toLocaleString()} me gusta</p>
               <p className="text-sm text-gray-900">
                 <span className="font-semibold">{post.username}</span> {post.caption}
               </p>
@@ -408,7 +408,6 @@ export function Community() {
         ))}
       </div>
 
-      {/* Floating Action Button */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
