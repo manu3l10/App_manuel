@@ -1,5 +1,7 @@
 import { motion } from "motion/react";
 import { Star, MapPin, Wifi, Coffee, Dumbbell } from "lucide-react";
+const HOTEL_FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1445019980597-93fa8acb246c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080";
 
 interface HotelCardProps {
   name: string;
@@ -26,7 +28,16 @@ export function HotelCard({ name, location, rating, price, image, amenities = []
     >
       {/* Image */}
       <div className="relative h-48 overflow-hidden">
-        <img src={image} alt={name} className="w-full h-full object-cover" />
+        <img
+          src={image}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (target.src === HOTEL_FALLBACK_IMAGE) return;
+            target.src = HOTEL_FALLBACK_IMAGE;
+          }}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg">
           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />

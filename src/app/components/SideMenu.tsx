@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { X, User, Calendar, Camera, Heart, FileText, Settings, Sparkles } from "lucide-react";
+import { X, User, Calendar, Camera, Heart, Settings, Sparkles, Map } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -33,8 +33,8 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
   const menuItems = [
     { icon: User, label: t('menu.profile'), path: "/profile", color: "from-blue-500 to-blue-600" },
     { icon: Calendar, label: t('menu.calendar'), path: "/calendar", color: "from-cyan-500 to-cyan-600" },
+    { icon: Map, label: t('menu.itineraries'), path: "/itineraries", color: "from-emerald-500 to-teal-600" },
     { icon: Camera, label: t('menu.community'), path: "/community", color: "from-indigo-500 to-indigo-600" },
-    { icon: FileText, label: t('menu.itineraries'), path: "/itineraries", color: "from-blue-600 to-blue-700" },
     { icon: Heart, label: t('menu.favorites'), path: "/favorites", color: "from-cyan-600 to-cyan-700" },
     { icon: Settings, label: t('menu.settings'), path: "/settings", color: "from-slate-500 to-slate-600" },
   ];

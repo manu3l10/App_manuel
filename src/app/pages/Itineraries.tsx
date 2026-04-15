@@ -1,23 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2, Plane, Building2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
+import { ItineraryDetails, deleteItineraryDetails, getItineraryDetails } from "../../lib/itineraryDetails";
+import { buildSignalsByDate } from "../../lib/calendarSignals";
 
 interface SavedItinerary {
-  id: number;
+  id: string | number;
   destination: string;
   dates: string;
   budget: string;
   image: string;
   rating?: number;
   saved: boolean;
+  details?: ItineraryDetails | null;
+  startDate: string;
+  endDate: string;
 }
 
 export function Itineraries() {
   const navigate = useNavigate();
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const monthName = calendarDate.toLocaleString("es-ES", { month: "long", year: "numeric" });
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOffset = new Date(year, month, 1).getDay();
+
+  const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
+  const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
+
+  const signalsByDate = useMemo(
+    () =>
+      buildSignalsByDate(
+        itineraries.map((item) => ({
+          id: item.id,
+          start_date: item.startDate,
+          end_date: item.endDate,
+        }))
+      ),
+    [itineraries]
+  );
+
+  const getDateKey = (d: number) => {
+    const m = String(month + 1).padStart(2, "0");
+    const day = String(d).padStart(2, "0");
+    return `${year}-${m}-${day}`;
+  };
 
   const fetchItineraries = async () => {
     setLoading(true);
@@ -33,10 +66,13 @@ export function Itineraries() {
         id: item.id,
         destination: item.destination,
         dates: `${item.start_date} - ${item.end_date}`,
+        startDate: item.start_date,
+        endDate: item.end_date,
         budget: item.budget,
         image: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZHZlbnR1cmUlMjB0cmF2ZWx8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080",
         rating: 4.5,
-        saved: true
+        saved: true,
+        details: getItineraryDetails(item.id),
       }));
       setItineraries(mappedData);
     }
@@ -47,7 +83,7 @@ export function Itineraries() {
     fetchItineraries();
   }, []);
 
-  const deleteItinerary = async (id: number) => {
+  const deleteItinerary = async (id: string | number) => {
     const { error } = await supabase
       .from('trips')
       .delete()
@@ -56,6 +92,7 @@ export function Itineraries() {
     if (error) {
       console.error("Error deleting itinerary:", error);
     } else {
+      deleteItineraryDetails(id);
       setItineraries(itineraries.filter((item) => item.id !== id));
     }
   };
@@ -66,7 +103,7 @@ export function Itineraries() {
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
-            onClick={() => navigate("/", { state: { openMenu: true } })}
+            onClick={() => navigate("/")}
             className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -77,6 +114,75 @@ export function Itineraries() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
+        >
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-semibold text-gray-900">Calendario de Viaje</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={prevMonth}
+                className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-700" />
+              </button>
+              <p className="text-sm font-medium text-slate-800 capitalize min-w-[140px] text-center">{monthName}</p>
+              <button
+                onClick={nextMonth}
+                className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-700" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {["D", "L", "M", "M", "J", "V", "S"].map((day, idx) => (
+              <div key={`${day}-${idx}`} className="text-center text-xs font-medium text-slate-500 py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {Array.from({ length: firstDayOffset }).map((_, i) => (
+              <div key={`offset-${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const signal = signalsByDate[getDateKey(day)];
+              const hasFlight = Boolean(signal?.hasFlight);
+              const hasHotel = Boolean(signal?.hasHotel);
+              return (
+                <div
+                  key={day}
+                  className={`aspect-square rounded-lg border text-sm font-medium flex flex-col items-center justify-center gap-1 ${
+                    hasFlight
+                      ? "bg-blue-500 text-white border-blue-600"
+                      : hasHotel
+                        ? "bg-purple-500 text-white border-purple-600"
+                        : "bg-white text-slate-700 border-slate-200"
+                  }`}
+                >
+                  <span>{day}</span>
+                  {(signal?.hasFlight || signal?.hasHotel) && (
+                    <span className="flex items-center gap-1">
+                      {signal.hasFlight && <span className="text-[11px] leading-none">✈️</span>}
+                      {signal.hasHotel && <Building2 className="w-3 h-3" />}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-4 mt-4 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1"><Plane className="w-3.5 h-3.5 text-blue-600" /> Vuelo</span>
+            <span className="inline-flex items-center gap-1"><Building2 className="w-3.5 h-3.5 text-pink-600" /> Hotel</span>
+          </div>
+        </motion.div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <motion.div
@@ -162,6 +268,45 @@ export function Itineraries() {
                     <span>{itinerary.budget}</span>
                   </div>
                 </div>
+
+                {itinerary.details && (
+                  <div className="mb-4 space-y-3 rounded-xl bg-purple-50/80 border border-purple-100 p-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 mb-2">Vuelos por fecha</p>
+                      <div className="space-y-2">
+                        {itinerary.details.flights.map((flight) => (
+                          <div key={`${flight.date}-${flight.route}`} className="flex items-start gap-2 text-xs text-gray-700">
+                            <Plane className="w-3.5 h-3.5 mt-0.5 text-blue-600" />
+                            <div>
+                              <p className="font-medium">{flight.date} • {flight.route}</p>
+                              <p>{flight.airline} • {flight.time} • {flight.price}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {itinerary.details.hotel ? (
+                      <div className="pt-2 border-t border-purple-100">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 mb-2">Hotel asignado</p>
+                        <div className="flex items-start gap-2 text-xs text-gray-700">
+                          <Building2 className="w-3.5 h-3.5 mt-0.5 text-pink-600" />
+                          <div>
+                            <p className="font-medium">{itinerary.details.hotel.name}</p>
+                            <p>
+                              {itinerary.details.hotel.location} • {itinerary.details.hotel.checkIn} al {itinerary.details.hotel.checkOut}
+                            </p>
+                            <p>{itinerary.details.hotel.pricePerNight} por noche</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-purple-100">
+                        <p className="text-xs text-gray-600">Hotel pendiente por confirmar.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow">
