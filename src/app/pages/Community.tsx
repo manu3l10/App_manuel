@@ -418,11 +418,11 @@ export function Community() {
       </motion.button>
 
       {showCreatePost && (
-        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center overflow-y-auto p-4">
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-purple-100 overflow-hidden"
+            className="w-full max-w-lg max-h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-2xl border border-purple-100 overflow-hidden flex flex-col"
           >
             <div className="p-4 border-b border-purple-100 flex items-center justify-between">
               <div>
@@ -438,7 +438,7 @@ export function Community() {
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 overflow-y-auto">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Ubicación</span>
                 <input
