@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut, Loader2, X, User, FileText } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut, Loader2, X, User, FileText, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -51,6 +51,25 @@ export function Profile() {
     user?.user_metadata?.full_name?.[0]?.toUpperCase() ||
     user?.email?.[0]?.toUpperCase() ||
     "V";
+
+  const buildDefaultCommunityAvatar = () => {
+    const seed =
+      user?.user_metadata?.username ||
+      user?.user_metadata?.full_name ||
+      user?.email?.split("@")[0] ||
+      "viajero";
+
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(String(seed))}`;
+  };
+
+  const getAvatarStoragePath = (avatarUrl: string) => {
+    const marker = "/storage/v1/object/public/avatars/";
+    const index = avatarUrl.indexOf(marker);
+    if (index === -1) return null;
+
+    const pathWithQuery = avatarUrl.slice(index + marker.length);
+    return decodeURIComponent(pathWithQuery.split("?")[0]);
+  };
 
   const handleAvatarClick = () => {
     if (avatarUploading) return;
@@ -121,6 +140,50 @@ export function Profile() {
         .update({ author_avatar: avatarUrl })
         .eq("user_id", user.id),
     ]);
+
+    setUser(data.user);
+    setAvatarUploading(false);
+  };
+
+  const handleRemoveAvatar = async () => {
+    const currentAvatarUrl = getAvatarUrl();
+    if (!user || !currentAvatarUrl || avatarUploading) return;
+
+    setAvatarUploading(true);
+
+    const nextMetadata = {
+      ...(user.user_metadata ?? {}),
+      avatar_url: null,
+      picture: null,
+    };
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: nextMetadata,
+    });
+
+    if (error) {
+      setAvatarUploading(false);
+      alert("No se pudo quitar la foto: " + error.message);
+      return;
+    }
+
+    const defaultAvatar = buildDefaultCommunityAvatar();
+
+    await Promise.all([
+      supabase
+        .from("community_posts")
+        .update({ author_avatar: defaultAvatar })
+        .eq("user_id", user.id),
+      supabase
+        .from("community_comments")
+        .update({ author_avatar: defaultAvatar })
+        .eq("user_id", user.id),
+    ]);
+
+    const storagePath = getAvatarStoragePath(currentAvatarUrl);
+    if (storagePath) {
+      await supabase.storage.from("avatars").remove([storagePath]);
+    }
 
     setUser(data.user);
     setAvatarUploading(false);
@@ -302,6 +365,20 @@ export function Profile() {
                   <Camera className="w-4 h-4 text-purple-600" />
                 )}
               </button>
+              {getAvatarUrl() && (
+                <button
+                  onClick={handleRemoveAvatar}
+                  disabled={avatarUploading}
+                  className="absolute bottom-0 left-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-red-100 hover:bg-red-50 transition-colors disabled:opacity-70"
+                  title="Eliminar foto de perfil"
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Name */}
