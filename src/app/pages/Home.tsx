@@ -7,6 +7,11 @@ import { AIChat } from "../components/AIChat";
 import { SideMenu } from "../components/SideMenu";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { supabase } from "../../lib/supabase";
+import {
+  CommunityNotificationRecord,
+  listCommunityNotifications,
+  markCommunityNotificationAsRead,
+} from "../../lib/communityApi";
 
 export function Home() {
   const navigate = useNavigate();
@@ -15,6 +20,8 @@ export function Home() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [notifications, setNotifications] = useState<CommunityNotificationRecord[]>([]);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -52,6 +59,7 @@ export function Home() {
       if (session) {
         setShowWelcome(false);
         setUser(session.user);
+        fetchNotifications();
       }
     };
     checkAuth();
@@ -60,9 +68,11 @@ export function Home() {
       if (session) {
         setShowWelcome(false);
         setUser(session.user);
+        fetchNotifications();
       } else {
         setShowWelcome(true);
         setUser(null);
+        setNotifications([]);
       }
     });
 
@@ -71,6 +81,39 @@ export function Home() {
 
   const handleStart = () => {
     setShowWelcome(false);
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      setNotificationsError(null);
+      const records = await listCommunityNotifications();
+      setNotifications(records);
+    } catch (error: any) {
+      console.error("Error loading notifications:", error);
+      setNotificationsError(error?.message ?? "No se pudieron cargar las notificaciones.");
+    }
+  };
+
+  const unreadNotifications = notifications.filter((notification) => !notification.read_at);
+
+  const openNotification = async (notification: CommunityNotificationRecord) => {
+    if (!notification.read_at) {
+      try {
+        await markCommunityNotificationAsRead(notification.id);
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === notification.id
+              ? { ...item, read_at: new Date().toISOString() }
+              : item
+          )
+        );
+      } catch (error) {
+        console.error("Error marking notification as read:", error);
+      }
+    }
+
+    setShowNotifications(false);
+    navigate("/community");
   };
 
   if (showWelcome) {
@@ -135,13 +178,21 @@ export function Home() {
             <div className="relative">
               <button
                 onClick={() => {
-                  setShowNotifications(!showNotifications);
+                  const nextOpen = !showNotifications;
+                  setShowNotifications(nextOpen);
                   setShowUserMenu(false);
+                  if (nextOpen) fetchNotifications();
                 }}
                 className={`p-2 hover:bg-white/5 active:scale-95 rounded-lg transition-all relative ${showNotifications ? 'bg-white/10' : ''}`}
               >
                 <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
-                <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-cyan-500 rounded-full ring-2 ring-slate-950" />
+                {unreadNotifications.length > 0 && (
+                  <div className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 bg-cyan-500 rounded-full ring-2 ring-slate-950 flex items-center justify-center">
+                    <span className="text-[9px] leading-none font-bold text-white">
+                      {unreadNotifications.length > 9 ? "9+" : unreadNotifications.length}
+                    </span>
+                  </div>
+                )}
               </button>
 
               <AnimatePresence>
@@ -157,11 +208,47 @@ export function Home() {
                       <div className="p-4 border-b border-white/5 bg-white/5">
                         <h3 className="text-sm font-bold text-white">{t('home.notificationsTitle')}</h3>
                       </div>
-                      <div className="p-8 text-center">
-                        <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Bell className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <p className="text-xs text-gray-500">{t('home.noNotifications')}</p>
+                      <div className="max-h-96 overflow-y-auto">
+                        {notificationsError && (
+                          <div className="p-4 text-xs text-red-300">
+                            {notificationsError}
+                            <button onClick={fetchNotifications} className="ml-2 underline">
+                              Reintentar
+                            </button>
+                          </div>
+                        )}
+
+                        {!notificationsError && notifications.length === 0 && (
+                          <div className="p-8 text-center">
+                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <Bell className="w-6 h-6 text-gray-600" />
+                            </div>
+                            <p className="text-xs text-gray-500">{t('home.noNotifications')}</p>
+                          </div>
+                        )}
+
+                        {!notificationsError && notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            onClick={() => openNotification(notification)}
+                            className="w-full p-4 flex items-start gap-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
+                          >
+                            <img
+                              src={notification.actor_avatar}
+                              alt={notification.actor_name}
+                              className="w-9 h-9 rounded-full border border-white/10"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-gray-200 leading-relaxed">{notification.message}</p>
+                              <p className="text-[10px] text-gray-500 mt-1">
+                                {new Date(notification.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                            {!notification.read_at && (
+                              <span className="mt-1 w-2 h-2 rounded-full bg-cyan-400 flex-shrink-0" />
+                            )}
+                          </button>
+                        ))}
                       </div>
                     </motion.div>
                   </>

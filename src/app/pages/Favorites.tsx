@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Heart, MapPin, Star, Plane, Hotel, Utensils } from "lucide-react";
+import { ArrowLeft, Heart, MapPin, Star, Plane, Hotel, Utensils, Bookmark } from "lucide-react";
 import { useNavigate } from "react-router";
+import { CommunityPostRecord, listSavedCommunityPosts, toggleCommunitySave } from "../../lib/communityApi";
 
-type FavoriteType = "destination" | "hotel" | "restaurant";
+type FavoriteType = "destination" | "hotel" | "restaurant" | "post";
 
 interface Favorite {
-  id: number;
+  id: string;
   name: string;
   location: string;
   type: FavoriteType;
@@ -18,9 +19,11 @@ interface Favorite {
 export function Favorites() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FavoriteType | "all">("all");
+  const [isLoadingSavedPosts, setIsLoadingSavedPosts] = useState(true);
+  const [savedPostsError, setSavedPostsError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([
     {
-      id: 1,
+      id: "placeholder-destination",
       name: "Explora Destinos",
       location: "Recomendado para ti",
       type: "destination",
@@ -30,9 +33,54 @@ export function Favorites() {
     },
   ]);
 
+  const mapPostToFavorite = (post: CommunityPostRecord): Favorite => ({
+    id: post.id,
+    name: post.author_name,
+    location: post.location,
+    type: "post",
+    image: post.image_url,
+    rating: 5.0,
+    description: post.caption,
+  });
+
+  const fetchSavedPosts = async () => {
+    setIsLoadingSavedPosts(true);
+    setSavedPostsError(null);
+
+    try {
+      const { posts } = await listSavedCommunityPosts();
+      const savedFavorites = posts.map(mapPostToFavorite);
+
+      setFavorites((prev) => [
+        ...prev.filter((favorite) => favorite.type !== "post"),
+        ...savedFavorites,
+      ]);
+    } catch (error: any) {
+      console.error("Error loading saved posts:", error);
+      setSavedPostsError(error?.message ?? "No se pudieron cargar las publicaciones guardadas.");
+    } finally {
+      setIsLoadingSavedPosts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedPosts();
+  }, []);
+
   const filteredFavorites = filter === "all" ? favorites : favorites.filter((f) => f.type === filter);
 
-  const removeFavorite = (id: number) => {
+  const removeFavorite = async (favorite: Favorite) => {
+    if (favorite.type === "post") {
+      try {
+        await toggleCommunitySave(favorite.id);
+      } catch (error: any) {
+        console.error("Error removing saved post:", error);
+        window.alert(error?.message ?? "No se pudo quitar la publicación guardada.");
+        return;
+      }
+    }
+
+    const id = favorite.id;
     setFavorites(favorites.filter((f) => f.id !== id));
   };
 
@@ -44,6 +92,8 @@ export function Favorites() {
         return Hotel;
       case "restaurant":
         return Utensils;
+      case "post":
+        return Bookmark;
     }
   };
 
@@ -109,7 +159,33 @@ export function Favorites() {
             <Utensils className="w-4 h-4" />
             Restaurantes ({favorites.filter((f) => f.type === "restaurant").length})
           </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setFilter("post")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "post"
+              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+              : "bg-white/80 text-gray-700 hover:bg-white"
+              }`}
+          >
+            <Bookmark className="w-4 h-4" />
+            Guardados ({favorites.filter((f) => f.type === "post").length})
+          </motion.button>
         </div>
+
+        {isLoadingSavedPosts && (
+          <div className="mb-4 rounded-xl bg-white/80 p-4 text-sm text-gray-600">
+            Cargando publicaciones guardadas...
+          </div>
+        )}
+
+        {savedPostsError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {savedPostsError}
+            <button onClick={fetchSavedPosts} className="ml-2 underline font-medium">
+              Reintentar
+            </button>
+          </div>
+        )}
 
         {/* Favorites Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -137,10 +213,14 @@ export function Favorites() {
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => removeFavorite(favorite.id)}
+                    onClick={() => removeFavorite(favorite)}
                     className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    <Heart className="w-4 h-4 fill-red-500 text-red-500" />
+                    {favorite.type === "post" ? (
+                      <Bookmark className="w-4 h-4 fill-purple-600 text-purple-600" />
+                    ) : (
+                      <Heart className="w-4 h-4 fill-red-500 text-red-500" />
+                    )}
                   </motion.button>
 
                   {/* Type badge */}

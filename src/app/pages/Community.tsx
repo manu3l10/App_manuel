@@ -3,17 +3,23 @@ import { motion } from "motion/react";
 import { ArrowLeft, Heart, MessageCircle, Bookmark, MoreHorizontal, MapPin, Plus, X, Image as ImageIcon, Send } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
+  CommunityCommentLikeRecord,
   CommunityCommentRecord,
   CommunityLikeRecord,
   CommunityPostRecord,
+  CommunitySavedPostRecord,
   createCommunityComment,
   createCommunityPost,
   deleteCommunityPost,
   getCurrentUserId,
+  listCommunityCommentLikesByCommentIds,
   listCommunityCommentsByPostIds,
   listCommunityLikesByPostIds,
   listCommunityPosts,
+  listCommunitySavedPostsByPostIds,
+  toggleCommunityCommentLike,
   toggleCommunityLike,
+  toggleCommunitySave,
   updateCommunityPost,
 } from "../../lib/communityApi";
 
@@ -21,10 +27,15 @@ const POST_COOLDOWN_MS = 8000;
 
 interface Comment {
   id: string;
+  postId: string;
+  parentCommentId: string | null;
   userId: string;
   username: string;
   text: string;
   editable: boolean;
+  likes: number;
+  liked: boolean;
+  replies: Comment[];
 }
 
 interface Post {
@@ -45,27 +56,65 @@ interface Post {
 
 const mapCommentRecordToComment = (
   record: CommunityCommentRecord,
-  currentUserId: string | null
+  currentUserId: string | null,
+  commentLikesCountById: Map<string, number>,
+  likedCommentsByMe: Set<string>
 ): Comment => ({
   id: record.id,
+  postId: record.post_id,
+  parentCommentId: record.parent_comment_id,
   userId: record.user_id,
   username: record.author_name,
   text: record.content,
   editable: record.user_id === currentUserId,
+  likes: commentLikesCountById.get(record.id) ?? 0,
+  liked: likedCommentsByMe.has(record.id),
+  replies: [],
 });
 
 const buildPostsFromRecords = (params: {
   posts: CommunityPostRecord[];
   comments: CommunityCommentRecord[];
   likes: CommunityLikeRecord[];
+  savedPosts: CommunitySavedPostRecord[];
+  commentLikes: CommunityCommentLikeRecord[];
   currentUserId: string | null;
 }): Post[] => {
   const commentsByPostId = new Map<string, Comment[]>();
   const likesCountByPostId = new Map<string, number>();
   const likedByMe = new Set<string>();
+  const savedByMe = new Set(params.savedPosts.map((saved) => saved.post_id));
+  const commentLikesCountById = new Map<string, number>();
+  const likedCommentsByMe = new Set<string>();
+
+  for (const like of params.commentLikes) {
+    commentLikesCountById.set(like.comment_id, (commentLikesCountById.get(like.comment_id) ?? 0) + 1);
+    if (params.currentUserId && like.user_id === params.currentUserId) {
+      likedCommentsByMe.add(like.comment_id);
+    }
+  }
+
+  const commentsById = new Map<string, Comment>();
 
   for (const comment of params.comments) {
-    const nextComment = mapCommentRecordToComment(comment, params.currentUserId);
+    commentsById.set(
+      comment.id,
+      mapCommentRecordToComment(comment, params.currentUserId, commentLikesCountById, likedCommentsByMe)
+    );
+  }
+
+  for (const comment of params.comments) {
+    const nextComment = commentsById.get(comment.id);
+    if (!nextComment) continue;
+
+    if (comment.parent_comment_id) {
+      const parent = commentsById.get(comment.parent_comment_id);
+      if (parent) {
+        parent.replies.push(nextComment);
+        continue;
+      }
+    }
+
     const existing = commentsByPostId.get(comment.post_id) ?? [];
     commentsByPostId.set(comment.post_id, [...existing, nextComment]);
   }
@@ -88,15 +137,18 @@ const buildPostsFromRecords = (params: {
       location: record.location,
       image: record.image_url,
       likes: likesCountByPostId.get(record.id) ?? 0,
-      comments: commentList.length,
+      comments: countCommentsWithReplies(commentList),
       caption: record.caption,
       liked: likedByMe.has(record.id),
-      saved: false,
+      saved: savedByMe.has(record.id),
       commentList,
       editable: record.user_id === params.currentUserId,
     };
   });
 };
+
+const countCommentsWithReplies = (comments: Comment[]): number =>
+  comments.reduce((total, comment) => total + 1 + countCommentsWithReplies(comment.replies), 0);
 
 export function Community() {
   const navigate = useNavigate();
@@ -105,6 +157,8 @@ export function Community() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
+  const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({});
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
@@ -113,6 +167,8 @@ export function Community() {
   const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
   const [cooldownTick, setCooldownTick] = useState(0);
   const [likePendingByPost, setLikePendingByPost] = useState<Record<string, boolean>>({});
+  const [savePendingByPost, setSavePendingByPost] = useState<Record<string, boolean>>({});
+  const [likePendingByComment, setLikePendingByComment] = useState<Record<string, boolean>>({});
   const [commentPendingByPost, setCommentPendingByPost] = useState<Record<string, boolean>>({});
   const [newPost, setNewPost] = useState({
     location: "",
@@ -141,10 +197,12 @@ export function Community() {
       const postRecords = await listCommunityPosts();
       const postIds = postRecords.map((post) => post.id);
 
-      const [comments, likes] = await Promise.all([
+      const [comments, likes, savedPosts] = await Promise.all([
         listCommunityCommentsByPostIds(postIds),
         listCommunityLikesByPostIds(postIds),
+        listCommunitySavedPostsByPostIds(postIds),
       ]);
+      const commentLikes = await listCommunityCommentLikesByCommentIds(comments.map((comment) => comment.id));
 
       setCurrentUserId(userId);
       setPosts(
@@ -152,6 +210,8 @@ export function Community() {
           posts: postRecords,
           comments,
           likes,
+          savedPosts,
+          commentLikes,
           currentUserId: userId,
         })
       );
@@ -220,8 +280,25 @@ export function Community() {
     }
   };
 
-  const toggleSave = (id: string) => {
+  const toggleSave = async (id: string) => {
+    if (savePendingByPost[id]) return;
+
+    const previousPost = posts.find((post) => post.id === id);
+    if (!previousPost) return;
+
+    setSavePendingByPost((prev) => ({ ...prev, [id]: true }));
     setPosts((prev) => prev.map((post) => (post.id === id ? { ...post, saved: !post.saved } : post)));
+
+    try {
+      const result = await toggleCommunitySave(id);
+      setPosts((prev) => prev.map((post) => (post.id === id ? { ...post, saved: result.saved } : post)));
+    } catch (error: any) {
+      console.error("Error saving post:", error);
+      setPosts((prev) => prev.map((post) => (post.id === id ? previousPost : post)));
+      window.alert(error?.message ?? "No se pudo guardar la publicación.");
+    } finally {
+      setSavePendingByPost((prev) => ({ ...prev, [id]: false }));
+    }
   };
 
   const addComment = async (postId: string) => {
@@ -233,7 +310,7 @@ export function Community() {
 
     try {
       const createdComment = await createCommunityComment({ postId, content: text });
-      const mappedComment = mapCommentRecordToComment(createdComment, currentUserId);
+      const mappedComment = mapCommentRecordToComment(createdComment, currentUserId, new Map(), new Set());
 
       setPosts((prev) =>
         prev.map((post) =>
@@ -254,6 +331,121 @@ export function Community() {
       window.alert(error?.message ?? "No se pudo publicar el comentario.");
     } finally {
       setCommentPendingByPost((prev) => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const addReply = async (postId: string, parentCommentId: string) => {
+    const text = replyInputs[parentCommentId]?.trim();
+    if (!text) return;
+    if (commentPendingByPost[parentCommentId]) return;
+
+    setCommentPendingByPost((prev) => ({ ...prev, [parentCommentId]: true }));
+
+    try {
+      const createdReply = await createCommunityComment({
+        postId,
+        content: text,
+        parentCommentId,
+      });
+      const mappedReply = mapCommentRecordToComment(createdReply, currentUserId, new Map(), new Set());
+
+      setPosts((prev) =>
+        prev.map((post) => {
+          if (post.id !== postId) return post;
+
+          return {
+            ...post,
+            comments: post.comments + 1,
+            commentList: post.commentList.map((comment) =>
+              comment.id === parentCommentId
+                ? { ...comment, replies: [...comment.replies, mappedReply] }
+                : comment
+            ),
+          };
+        })
+      );
+
+      setReplyInputs((prev) => ({ ...prev, [parentCommentId]: "" }));
+      setReplyingTo((prev) => ({ ...prev, [postId]: null }));
+      setOpenComments((prev) => ({ ...prev, [postId]: true }));
+    } catch (error: any) {
+      console.error("Error creating reply:", error);
+      window.alert(error?.message ?? "No se pudo publicar la respuesta.");
+    } finally {
+      setCommentPendingByPost((prev) => ({ ...prev, [parentCommentId]: false }));
+    }
+  };
+
+  const toggleCommentLike = async (postId: string, commentId: string) => {
+    if (likePendingByComment[commentId]) return;
+
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost) return;
+
+    const updateComment = (comments: Comment[], updater: (comment: Comment) => Comment): Comment[] =>
+      comments.map((comment) => {
+        if (comment.id === commentId) return updater(comment);
+        return { ...comment, replies: updateComment(comment.replies, updater) };
+      });
+
+    const findComment = (comments: Comment[]): Comment | undefined => {
+      for (const comment of comments) {
+        if (comment.id === commentId) return comment;
+        const replyMatch = findComment(comment.replies);
+        if (replyMatch) return replyMatch;
+      }
+      return undefined;
+    };
+
+    const targetComment = findComment(targetPost.commentList);
+    if (!targetComment) return;
+
+    const optimisticLiked = !targetComment.liked;
+    const optimisticLikes = optimisticLiked ? targetComment.likes + 1 : Math.max(0, targetComment.likes - 1);
+
+    setLikePendingByComment((prev) => ({ ...prev, [commentId]: true }));
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              commentList: updateComment(post.commentList, (comment) => ({
+                ...comment,
+                liked: optimisticLiked,
+                likes: optimisticLikes,
+              })),
+            }
+          : post
+      )
+    );
+
+    try {
+      const result = await toggleCommunityCommentLike(commentId);
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+              ...post,
+              commentList: updateComment(post.commentList, (comment) => ({
+                ...comment,
+                liked: result.liked,
+                  likes:
+                    comment.liked === result.liked
+                      ? comment.likes
+                      : result.liked
+                        ? comment.likes + 1
+                        : Math.max(0, comment.likes - 1),
+              })),
+            }
+            : post
+        )
+      );
+    } catch (error: any) {
+      console.error("Error liking comment:", error);
+      setPosts((prev) => prev.map((post) => (post.id === postId ? targetPost : post)));
+      window.alert(error?.message ?? "No se pudo registrar el like del comentario.");
+    } finally {
+      setLikePendingByComment((prev) => ({ ...prev, [commentId]: false }));
     }
   };
 
@@ -542,9 +734,72 @@ export function Community() {
                 <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
                   {post.commentList.length > 0 ? (
                     post.commentList.map((comment) => (
-                      <p key={comment.id} className="text-sm text-gray-800">
-                        <span className="font-semibold">{comment.username}</span> {comment.text}
-                      </p>
+                      <div key={comment.id} className="space-y-2">
+                        <div className="text-sm text-gray-800">
+                          <p>
+                            <span className="font-semibold">{comment.username}</span> {comment.text}
+                          </p>
+                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                            <button
+                              onClick={() => toggleCommentLike(post.id, comment.id)}
+                              disabled={Boolean(likePendingByComment[comment.id])}
+                              className={`font-medium ${comment.liked ? "text-red-500" : "hover:text-purple-600"}`}
+                            >
+                              {comment.liked ? "Te gusta" : "Me gusta"}
+                            </button>
+                            <span>{comment.likes} likes</span>
+                            <button
+                              onClick={() => setReplyingTo((prev) => ({ ...prev, [post.id]: prev[post.id] === comment.id ? null : comment.id }))}
+                              className="font-medium hover:text-purple-600"
+                            >
+                              Responder
+                            </button>
+                          </div>
+                        </div>
+
+                        {comment.replies.length > 0 && (
+                          <div className="ml-5 space-y-2 border-l border-purple-100 pl-3">
+                            {comment.replies.map((reply) => (
+                              <div key={reply.id} className="text-sm text-gray-800">
+                                <p>
+                                  <span className="font-semibold">{reply.username}</span> {reply.text}
+                                </p>
+                                <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                                  <button
+                                    onClick={() => toggleCommentLike(post.id, reply.id)}
+                                    disabled={Boolean(likePendingByComment[reply.id])}
+                                    className={`font-medium ${reply.liked ? "text-red-500" : "hover:text-purple-600"}`}
+                                  >
+                                    {reply.liked ? "Te gusta" : "Me gusta"}
+                                  </button>
+                                  <span>{reply.likes} likes</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {replyingTo[post.id] === comment.id && (
+                          <div className="ml-5 flex items-center gap-2">
+                            <input
+                              value={replyInputs[comment.id] ?? ""}
+                              onChange={(event) => setReplyInputs((prev) => ({ ...prev, [comment.id]: event.target.value }))}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") addReply(post.id, comment.id);
+                              }}
+                              placeholder={`Responder a ${comment.username}...`}
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                            />
+                            <button
+                              onClick={() => addReply(post.id, comment.id)}
+                              className="p-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
+                              disabled={Boolean(commentPendingByPost[comment.id])}
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ))
                   ) : (
                     <p className="text-sm text-gray-500">Sé la primera persona en comentar.</p>
