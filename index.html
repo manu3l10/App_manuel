@@ -1,14 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Revisar solicitud completa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>My Travel Assistance</title>
+  <meta
+    name="description"
+    content="My Travel Assistance: itinerarios inteligentes, comunidad de viajeros y asistencia de viaje impulsada por IA."
+  />
+  <meta name="theme-color" content="#020817" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MTA" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --launch-bg: #020817;
+      --launch-bg-secondary: #0f1e52;
+      --launch-glow: rgba(56, 189, 248, 0.45);
+      --launch-glow-2: rgba(37, 99, 235, 0.38);
+      --launch-text: #f8fbff;
+      --launch-subtle: rgba(226, 244, 255, 0.74);
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.16), transparent 0 28%),
+        radial-gradient(circle at 80% 80%, rgba(37, 99, 235, 0.18), transparent 0 30%),
+        linear-gradient(145deg, #030817 0%, #08122e 35%, #0a1e50 65%, #020817 100%);
+    }
+
+    body {
+      font-family: "Inter", "Segoe UI", sans-serif;
+      color: var(--launch-text);
+    }
+
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    .launch-screen {
+      position: relative;
+      display: flex;
+      min-height: 100vh;
+      min-height: 100dvh;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 18%, rgba(56, 189, 248, 0.14), transparent 0 26%),
+        radial-gradient(circle at 75% 80%, rgba(37, 99, 235, 0.2), transparent 0 30%),
+        linear-gradient(145deg, var(--launch-bg) 0%, #08122e 35%, var(--launch-bg-secondary) 68%, var(--launch-bg) 100%);
+      isolation: isolate;
+    }
+
+    .launch-screen::before,
+    .launch-screen::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .launch-screen::before {
+      background-image:
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.95) 0 1.5px, transparent 2px),
+        radial-gradient(circle at 28% 62%, rgba(201, 241, 255, 0.8) 0 1px, transparent 1.6px),
+        radial-gradient(circle at 73% 26%, rgba(255, 255, 255, 0.9) 0 1.7px, transparent 2px),
+        radial-gradient(circle at 82% 64%, rgba(210, 242, 255, 0.8) 0 1.3px, transparent 2px),
+        radial-gradient(circle at 58% 18%, rgba(255, 255, 255, 0.84) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 42% 78%, rgba(193, 235, 255, 0.76) 0 1.2px, transparent 1.8px);
+      opacity: 0.82;
+    }
+
+    .launch-screen::after {
+      background:
+        radial-gradient(circle, var(--launch-glow) 0%, transparent 62%);
+      width: 22rem;
+      height: 22rem;
+      inset: auto;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      filter: blur(18px);
+      opacity: 0.7;
+      animation: launchPulse 3.4s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    .launch-screen__content {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .launch-screen__badge {
+      width: 7.5rem;
+      height: 7.5rem;
+      border-radius: 2rem;
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05)),
+        linear-gradient(145deg, #0c1740, #123a90 58%, #081126);
+      box-shadow:
+        0 1.5rem 3.5rem rgba(8, 31, 90, 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+        0 0 3.2rem rgba(56, 189, 248, 0.26);
+      display: grid;
+      place-items: center;
+      transform: translateZ(0);
+      animation: badgeFloat 3.6s ease-in-out infinite;
+    }
+
+    .launch-screen__badge img {
+      width: 4.4rem;
+      height: 4.4rem;
+      display: block;
+      filter: drop-shadow(0 0 1.2rem rgba(148, 232, 255, 0.24));
+    }
+
+    .launch-screen__title {
+      margin: 0;
+      font-size: clamp(1.3rem, 4vw, 1.8rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .launch-screen__subtitle {
+      margin: 0;
+      max-width: 18rem;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      color: var(--launch-subtle);
+    }
+
+    .launch-screen__orbit {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 13rem;
+      height: 13rem;
+      margin-left: -6.5rem;
+      margin-top: -6.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 232, 255, 0.14);
+      box-shadow: 0 0 4rem rgba(37, 99, 235, 0.1) inset;
+      animation: orbitSpin 12s linear infinite;
+    }
+
+    .launch-screen__orbit::before,
+    .launch-screen__orbit::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(125, 224, 255, 0.76));
+    }
+
+    .launch-screen__orbit::before {
+      width: 0.55rem;
+      height: 0.55rem;
+      top: 0.55rem;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 1rem rgba(125, 224, 255, 0.62);
+    }
+
+    .launch-screen__orbit::after {
+      width: 0.38rem;
+      height: 0.38rem;
+      right: 1.5rem;
+      bottom: 1.2rem;
+      box-shadow: 0 0 0.8rem rgba(125, 224, 255, 0.42);
+    }
+
+    @keyframes badgeFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-0.35rem) scale(1.015); }
+    }
+
+    @keyframes launchPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.55; }
+      50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.9; }
+    }
+
+    @keyframes orbitSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="launch-screen" aria-label="Abriendo My Travel Assistance">
+      <div class="launch-screen__orbit"></div>
+      <div class="launch-screen__content">
+        <div class="launch-screen__badge">
+          <img src="/icons/icon.svg" alt="Icono de My Travel Assistance" />
+        </div>
+        <h1 class="launch-screen__title">My Travel Assistance</h1>
+        <p class="launch-screen__subtitle">Tu viaje despega en un entorno azul espacial mientras cargamos la app.</p>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

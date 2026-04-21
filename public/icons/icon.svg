@@ -1,0 +1,45 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="88" y1="56" x2="432" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B153C" />
+      <stop offset="0.52" stop-color="#133D9A" />
+      <stop offset="1" stop-color="#071021" />
+    </linearGradient>
+    <radialGradient id="glowTop" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(148 124) rotate(40) scale(244 244)">
+      <stop stop-color="#62D6FF" stop-opacity="0.7" />
+      <stop offset="1" stop-color="#62D6FF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowBottom" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(364 380) rotate(90) scale(232)">
+      <stop stop-color="#1E90FF" stop-opacity="0.48" />
+      <stop offset="1" stop-color="#1E90FF" stop-opacity="0" />
+    </radialGradient>
+    <filter id="softGlow" x="46" y="46" width="420" height="420" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix" />
+      <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+      <feGaussianBlur stdDeviation="14" result="effect1_foregroundBlur" />
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="132" fill="url(#bg)" />
+  <rect width="512" height="512" rx="132" fill="url(#glowTop)" />
+  <rect width="512" height="512" rx="132" fill="url(#glowBottom)" />
+
+  <g opacity="0.78">
+    <circle cx="124" cy="124" r="4" fill="#E7F8FF" />
+    <circle cx="392" cy="122" r="5" fill="#A8EBFF" />
+    <circle cx="138" cy="362" r="3.5" fill="#C9F6FF" />
+    <circle cx="389" cy="369" r="3.5" fill="#EAFBFF" />
+    <circle cx="200" cy="96" r="2.5" fill="#C9F6FF" />
+    <circle cx="328" cy="420" r="2.5" fill="#C9F6FF" />
+  </g>
+
+  <g filter="url(#softGlow)">
+    <path d="M256 104L286 184C292 199 304 211 320 217L408 256L320 295C304 301 292 313 286 328L256 408L226 328C220 313 208 301 192 295L104 256L192 217C208 211 220 199 226 184L256 104Z" fill="#79E5FF" fill-opacity="0.36" />
+  </g>
+
+  <path d="M256 118L281 189C286 204 298 216 313 221L394 256L313 291C298 296 286 308 281 323L256 394L231 323C226 308 214 296 199 291L118 256L199 221C214 216 226 204 231 189L256 118Z" fill="#F8FDFF" />
+  <path d="M256 160L274 214C277 224 285 232 295 235L352 256L295 277C285 280 277 288 274 298L256 352L238 298C235 288 227 280 217 277L160 256L217 235C227 232 235 224 238 214L256 160Z" fill="#8EEAFF" />
+
+  <path d="M370 130L378 154C380 159 384 163 389 165L413 173L389 181C384 183 380 187 378 192L370 216L362 192C360 187 356 183 351 181L327 173L351 165C356 163 360 159 362 154L370 130Z" fill="#F3FCFF" fill-opacity="0.95" />
+  <path d="M141 310L148 330C150 334 153 337 157 339L177 346L157 353C153 355 150 358 148 362L141 382L134 362C132 358 129 355 125 353L105 346L125 339C129 337 132 334 134 330L141 310Z" fill="#B5F0FF" fill-opacity="0.92" />
+</svg>
