@@ -1,8 +1,78 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Plane, Sparkles, Mail, Lock, UserPlus, LogIn, Loader2 } from "lucide-react";
+import { Sparkles, Mail, Lock, UserPlus, LogIn, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { supabase } from "../../lib/supabase";
+
+const OAUTH_ERROR_KEYS = ["error", "error_code", "error_description"];
+
+function decodeAuthMessage(value: string | null) {
+  if (!value) return "";
+
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return value;
+  }
+}
+
+function readOAuthErrorFromUrl() {
+  const readParams = (params: URLSearchParams) => {
+    for (const key of OAUTH_ERROR_KEYS) {
+      const value = decodeAuthMessage(params.get(key));
+      if (value) return value;
+    }
+
+    return "";
+  };
+
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const searchParams = new URLSearchParams(window.location.search);
+
+  return readParams(hashParams) || readParams(searchParams);
+}
+
+function clearOAuthErrorFromUrl() {
+  const url = new URL(window.location.href);
+  let hasOAuthError = false;
+
+  OAUTH_ERROR_KEYS.forEach((key) => {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key);
+      hasOAuthError = true;
+    }
+  });
+
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+  OAUTH_ERROR_KEYS.forEach((key) => {
+    if (hashParams.has(key)) {
+      hashParams.delete(key);
+      hasOAuthError = true;
+    }
+  });
+
+  if (!hasOAuthError) return;
+
+  url.hash = hashParams.toString() ? `#${hashParams.toString()}` : "";
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
+function getOAuthRedirectUrl() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.search = "";
+  return url.toString();
+}
+
+function isAndroidEmbeddedBrowser() {
+  const userAgent = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(userAgent);
+  const isWebView = /\bwv\b|; wv\)/i.test(userAgent) || /Version\/[\d.]+ Chrome\/[\d.]+ Mobile Safari\/[\d.]+/i.test(userAgent);
+  const isInAppBrowser = /Instagram|FBAN|FBAV|FB_IAB|Line\/|Messenger|Snapchat|TikTok/i.test(userAgent);
+
+  return isAndroid && (isWebView || isInAppBrowser);
+}
 
 // Google icon SVG component
 function GoogleIcon() {
@@ -34,6 +104,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [showAndroidBrowserHint, setShowAndroidBrowserHint] = useState(false);
   const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -86,11 +157,12 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: getOAuthRedirectUrl(),
         },
       });
       if (error) throw error;
     } catch (err: any) {
+      console.error("Google OAuth error:", err);
       setError(err.message);
       setLoading(false);
     }
@@ -98,8 +170,21 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const isEmbeddedAndroidBrowser = isAndroidEmbeddedBrowser();
+
     checkMobile();
+    setShowAndroidBrowserHint(isEmbeddedAndroidBrowser);
     window.addEventListener('resize', checkMobile);
+
+    const oauthError = readOAuthErrorFromUrl();
+    if (oauthError) {
+      setError(
+        isEmbeddedAndroidBrowser
+          ? `${oauthError}. Si estas en un navegador embebido de Android, abre la app directamente en Chrome e intenta de nuevo.`
+          : oauthError
+      );
+      clearOAuthErrorFromUrl();
+    }
 
     const setHeight = () => {
       document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
@@ -161,6 +246,13 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
                 <GoogleIcon />
                 <span>Continuar con Google</span>
               </button>
+
+              {showAndroidBrowserHint && (
+                <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-left text-xs text-amber-100">
+                  En algunos Android, Google bloquea el login dentro de navegadores embebidos o WebView.
+                  Si no abre o vuelve sin iniciar sesion, abre esta pagina directamente en Chrome.
+                </p>
+              )}
             </div>
 
             {/* Divider */}

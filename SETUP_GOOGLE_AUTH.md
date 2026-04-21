@@ -23,14 +23,21 @@
    - Completa los datos básicos (nombre de la app, email, etc.)
 4. Para el tipo de aplicación, selecciona **Web Application**
 5. Nombre: `MTA Frontend` o similar
-6. Añade los **Authorized redirect URIs**:
+6. Añade los **Authorized JavaScript origins**:
+   ```
+   http://localhost:5173
+   https://tudominio.com
+   ```
+   (Usa tu dominio real de producción)
+
+7. Añade los **Authorized redirect URIs**:
    ```
    https://wxrxagmxrmpfdltrclld.supabase.co/auth/v1/callback
    ```
    (Reemplaza el subdomain con el tuyo de Supabase si es diferente)
 
-7. Copia el **Client ID** (lo necesitarás)
-8. Descarga el archivo JSON como referencia
+8. Copia el **Client ID** (lo necesitarás)
+9. Descarga el archivo JSON como referencia
 
 ### 4. Configurar Google OAuth en Supabase
 
@@ -65,6 +72,7 @@
 - **Desarrollo local**: Google OAuth funciona con `localhost:5173` pero debe estar configurado en Google Cloud Console
 - **Seguridad**: Nunca expongas el Client Secret en el cliente (frontend). Supabase maneja esto en el backend
 - **Email desde Google**: Cuando un usuario se autentica con Google, Supabase automáticamente crea un usuario con su email y información del perfil
+- **Android y WebView**: Google puede bloquear el login si la app se abre dentro de un navegador embebido (por ejemplo desde redes sociales, mensajeria o un WebView nativo). En Android, prueba siempre tambien abriendo la URL directamente en Chrome.
 
 ## Troubleshooting
 
@@ -75,6 +83,8 @@
 ### El botón de Google no funciona
 - Asegúrate que Google+ API esté habilitada en Google Cloud Console
 - Verifica que el Client ID sea correcto en Supabase
+- Verifica que el dominio de la app exista en **Authorized JavaScript origins**
+- Si falla solo en Android, abre la app directamente en Chrome y evita navegadores embebidos
 
 ### Usuario se crea pero no inicia sesión
 - Puede ser que la pantalla de consentimiento no esté configurada correctamente
