@@ -99,7 +99,7 @@ function GoogleIcon() {
 }
 
 interface WelcomeScreenProps {
-  onStart: () => void;
+  onStart?: () => void;
 }
 
 export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
@@ -124,7 +124,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
           password,
         });
         if (error) throw error;
-        onStart();
+        onStart?.();
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -136,7 +136,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
           password,
         });
         if (!confirmError && confirmData.user) {
-          onStart();
+          onStart?.();
         } else {
           setError("Cuenta creada. Por favor inicia sesión.");
           setIsLogin(true);

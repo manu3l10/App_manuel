@@ -5,18 +5,15 @@ import { useNavigate } from "react-router";
 import {
   CommunityCommentLikeRecord,
   CommunityCommentRecord,
+  CommunityFeedSnapshot,
   CommunityLikeRecord,
   CommunityPostRecord,
   CommunitySavedPostRecord,
   createCommunityComment,
   createCommunityPost,
   deleteCommunityPost,
-  getCurrentUserId,
-  listCommunityCommentLikesByCommentIds,
-  listCommunityCommentsByPostIds,
-  listCommunityLikesByPostIds,
-  listCommunityPosts,
-  listCommunitySavedPostsByPostIds,
+  getCachedCommunityFeed,
+  loadCommunityFeed,
   toggleCommunityCommentLike,
   toggleCommunityLike,
   toggleCommunitySave,
@@ -150,12 +147,23 @@ const buildPostsFromRecords = (params: {
 const countCommentsWithReplies = (comments: Comment[]): number =>
   comments.reduce((total, comment) => total + 1 + countCommentsWithReplies(comment.replies), 0);
 
+const buildPostsFromSnapshot = (snapshot: CommunityFeedSnapshot): Post[] =>
+  buildPostsFromRecords({
+    posts: snapshot.posts,
+    comments: snapshot.comments,
+    likes: snapshot.likes,
+    savedPosts: snapshot.savedPosts,
+    commentLikes: snapshot.commentLikes,
+    currentUserId: snapshot.currentUserId,
+  });
+
 export function Community() {
   const navigate = useNavigate();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedFeed = getCachedCommunityFeed();
+  const [posts, setPosts] = useState<Post[]>(() => (cachedFeed ? buildPostsFromSnapshot(cachedFeed) : []));
+  const [isLoading, setIsLoading] = useState(!cachedFeed);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(cachedFeed?.currentUserId ?? null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({});
@@ -188,33 +196,24 @@ export function Community() {
     [isSubmittingPost, isPublishCooldownActive, newPost]
   );
 
-  const fetchPosts = async () => {
-    setIsLoading(true);
+  const fetchPosts = async (options: { forceRefresh?: boolean } = {}) => {
+    const { forceRefresh = false } = options;
+    const cachedSnapshot = !forceRefresh ? getCachedCommunityFeed() : null;
+
+    if (cachedSnapshot) {
+      setCurrentUserId(cachedSnapshot.currentUserId);
+      setPosts(buildPostsFromSnapshot(cachedSnapshot));
+      setIsLoading(false);
+    } else if (posts.length === 0) {
+      setIsLoading(true);
+    }
+
     setLoadError(null);
 
     try {
-      const userId = await getCurrentUserId();
-      const postRecords = await listCommunityPosts();
-      const postIds = postRecords.map((post) => post.id);
-
-      const [comments, likes, savedPosts] = await Promise.all([
-        listCommunityCommentsByPostIds(postIds),
-        listCommunityLikesByPostIds(postIds),
-        listCommunitySavedPostsByPostIds(postIds),
-      ]);
-      const commentLikes = await listCommunityCommentLikesByCommentIds(comments.map((comment) => comment.id));
-
-      setCurrentUserId(userId);
-      setPosts(
-        buildPostsFromRecords({
-          posts: postRecords,
-          comments,
-          likes,
-          savedPosts,
-          commentLikes,
-          currentUserId: userId,
-        })
-      );
+      const snapshot = await loadCommunityFeed({ forceRefresh });
+      setCurrentUserId(snapshot.currentUserId);
+      setPosts(buildPostsFromSnapshot(snapshot));
     } catch (error: any) {
       console.error("Error loading community posts:", error);
       setLoadError(error?.message ?? "No se pudieron cargar las publicaciones.");
@@ -224,7 +223,7 @@ export function Community() {
   };
 
   useEffect(() => {
-    fetchPosts();
+    void fetchPosts();
   }, []);
 
   useEffect(() => {
@@ -615,12 +614,12 @@ export function Community() {
           <div className="p-8 text-center text-gray-500">Aún no hay publicaciones en la comunidad.</div>
         )}
 
-        {posts.map((post, index) => (
+        {posts.map((post) => (
           <motion.div
             key={post.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.08 }}
+            transition={{ duration: 0.2 }}
             className="bg-white mb-6 border-b border-gray-100 last:border-b-0"
           >
             <div className="px-4 py-3 flex items-center justify-between">

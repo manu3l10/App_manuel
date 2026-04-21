@@ -3,7 +3,7 @@ import { X, User, Calendar, Camera, Heart, Settings, Sparkles, Map } from "lucid
 import { useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -14,25 +14,14 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(false);
   const { t } = useLanguage();
-
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    checkUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setUser(session?.user ?? null);
-    });
-
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
+
     return () => {
-      subscription.unsubscribe();
       window.removeEventListener('resize', checkMobile);
     };
   }, []);

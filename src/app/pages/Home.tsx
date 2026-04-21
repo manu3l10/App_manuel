@@ -6,20 +6,44 @@ import { WelcomeScreen } from "../components/WelcomeScreen";
 import { AIChat } from "../components/AIChat";
 import { SideMenu } from "../components/SideMenu";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { supabase } from "../../lib/supabase";
 import {
   CommunityNotificationRecord,
   listCommunityNotifications,
   markCommunityNotificationAsRead,
+  warmCommunityFeed,
 } from "../../lib/communityApi";
+import { useAuth } from "../../contexts/AuthContext";
+
+function HomeLoadingScreen() {
+  return (
+    <div
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950"
+      style={{ minHeight: "calc(var(--vh, 1vh) * 100)" }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.12),transparent_48%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(6,182,212,0.14),transparent_42%)]" />
+
+      <div className="relative z-10 flex flex-col items-center gap-4 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/30 via-cyan-400/20 to-slate-950 border border-white/10 shadow-2xl shadow-blue-950/50">
+          <div className="h-10 w-10 rounded-full border-2 border-cyan-200/70 border-t-transparent animate-spin" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-white">Preparando tu viaje</p>
+          <p className="mt-1 text-sm text-slate-300">Cargando tu sesión y las secciones principales...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Home() {
   const navigate = useNavigate();
+  const { isAuthReady, user } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
   const { t } = useLanguage();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [notifications, setNotifications] = useState<CommunityNotificationRecord[]>([]);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
@@ -41,7 +65,6 @@ export function Home() {
     };
   }, []);
 
-  const [showWelcome, setShowWelcome] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -53,36 +76,6 @@ export function Home() {
     }
   }, [location, navigate]);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setShowWelcome(false);
-        setUser(session.user);
-        fetchNotifications();
-      }
-    };
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      if (session) {
-        setShowWelcome(false);
-        setUser(session.user);
-        fetchNotifications();
-      } else {
-        setShowWelcome(true);
-        setUser(null);
-        setNotifications([]);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleStart = () => {
-    setShowWelcome(false);
-  };
-
   const fetchNotifications = async () => {
     try {
       setNotificationsError(null);
@@ -93,6 +86,18 @@ export function Home() {
       setNotificationsError(error?.message ?? "No se pudieron cargar las notificaciones.");
     }
   };
+
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    void fetchNotifications();
+    void warmCommunityFeed();
+  }, [isAuthReady, user?.id]);
 
   const getUserAvatarUrl = () =>
     user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
@@ -130,8 +135,12 @@ export function Home() {
     navigate("/community");
   };
 
-  if (showWelcome) {
-    return <WelcomeScreen onStart={handleStart} />;
+  if (!isAuthReady) {
+    return <HomeLoadingScreen />;
+  }
+
+  if (!user) {
+    return <WelcomeScreen />;
   }
 
   return (

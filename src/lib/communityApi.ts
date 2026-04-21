@@ -57,6 +57,20 @@ export interface CommunityNotificationRecord {
   created_at: string;
 }
 
+export interface CommunityFeedSnapshot {
+  currentUserId: string | null;
+  posts: CommunityPostRecord[];
+  comments: CommunityCommentRecord[];
+  likes: CommunityLikeRecord[];
+  savedPosts: CommunitySavedPostRecord[];
+  commentLikes: CommunityCommentLikeRecord[];
+  fetchedAt: number;
+}
+
+const COMMUNITY_FEED_CACHE_TTL_MS = 45_000;
+let cachedCommunityFeed: CommunityFeedSnapshot | null = null;
+let communityFeedRequest: Promise<CommunityFeedSnapshot> | null = null;
+
 const buildDefaultAvatar = (seed: string) =>
   `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
 
@@ -139,15 +153,17 @@ export const listCommunityLikesByPostIds = async (
 };
 
 export const listCommunitySavedPostsByPostIds = async (
-  postIds: string[]
+  postIds: string[],
+  currentUserId?: string | null
 ): Promise<CommunitySavedPostRecord[]> => {
   if (postIds.length === 0) return [];
-  const user = await getCurrentUserOrThrow();
+  const resolvedUserId = currentUserId ?? (await getCurrentUser())?.id ?? null;
+  if (!resolvedUserId) return [];
 
   const { data, error } = await supabase
     .from('community_saved_posts')
     .select('post_id,user_id,created_at')
-    .eq('user_id', user.id)
+    .eq('user_id', resolvedUserId)
     .in('post_id', postIds);
 
   if (error) throw error;
@@ -219,6 +235,75 @@ export const listSavedCommunityPosts = async (): Promise<{
   return { posts, saved };
 };
 
+export const getCachedCommunityFeed = (): CommunityFeedSnapshot | null => {
+  if (!cachedCommunityFeed) return null;
+  if (Date.now() - cachedCommunityFeed.fetchedAt > COMMUNITY_FEED_CACHE_TTL_MS) return null;
+  return cachedCommunityFeed;
+};
+
+export const invalidateCommunityFeedCache = () => {
+  cachedCommunityFeed = null;
+  communityFeedRequest = null;
+};
+
+export const loadCommunityFeed = async (
+  options: { forceRefresh?: boolean } = {}
+): Promise<CommunityFeedSnapshot> => {
+  const { forceRefresh = false } = options;
+  const cached = !forceRefresh ? getCachedCommunityFeed() : null;
+  if (cached) return cached;
+
+  if (communityFeedRequest) {
+    return communityFeedRequest;
+  }
+
+  communityFeedRequest = (async () => {
+    const [currentUserId, postRecords] = await Promise.all([
+      getCurrentUserId(),
+      listCommunityPosts(),
+    ]);
+
+    const postIds = postRecords.map((post) => post.id);
+    const commentsPromise = listCommunityCommentsByPostIds(postIds);
+
+    const [comments, likes, savedPosts] = await Promise.all([
+      commentsPromise,
+      listCommunityLikesByPostIds(postIds),
+      listCommunitySavedPostsByPostIds(postIds, currentUserId),
+    ]);
+
+    const commentIds = comments.map((comment) => comment.id);
+    const commentLikes = await listCommunityCommentLikesByCommentIds(commentIds);
+
+    const snapshot: CommunityFeedSnapshot = {
+      currentUserId,
+      posts: postRecords,
+      comments,
+      likes,
+      savedPosts,
+      commentLikes,
+      fetchedAt: Date.now(),
+    };
+
+    cachedCommunityFeed = snapshot;
+    return snapshot;
+  })();
+
+  try {
+    return await communityFeedRequest;
+  } finally {
+    communityFeedRequest = null;
+  }
+};
+
+export const warmCommunityFeed = async (): Promise<void> => {
+  try {
+    await loadCommunityFeed();
+  } catch (error) {
+    console.error("Error warming community feed:", error);
+  }
+};
+
 export const createCommunityPost = async (payload: {
   location: string;
   caption: string;
@@ -241,6 +326,7 @@ export const createCommunityPost = async (payload: {
     .single();
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   return data as CommunityPostRecord;
 };
 
@@ -266,6 +352,7 @@ export const createCommunityComment = async (payload: {
     .single();
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   await maybeCreateReplyNotification(data as CommunityCommentRecord, user);
   return data as CommunityCommentRecord;
 };
@@ -292,6 +379,7 @@ export const toggleCommunityLike = async (
       .eq('user_id', user.id);
 
     if (error) throw error;
+    invalidateCommunityFeedCache();
     return { liked: false };
   }
 
@@ -303,6 +391,7 @@ export const toggleCommunityLike = async (
     });
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   await maybeCreatePostLikeNotification(postId, user);
   return { liked: true };
 };
@@ -329,6 +418,7 @@ export const toggleCommunitySave = async (
       .eq('user_id', user.id);
 
     if (error) throw error;
+    invalidateCommunityFeedCache();
     return { saved: false };
   }
 
@@ -340,6 +430,7 @@ export const toggleCommunitySave = async (
     });
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   return { saved: true };
 };
 
@@ -365,6 +456,7 @@ export const toggleCommunityCommentLike = async (
       .eq('user_id', user.id);
 
     if (error) throw error;
+    invalidateCommunityFeedCache();
     return { liked: false };
   }
 
@@ -376,6 +468,7 @@ export const toggleCommunityCommentLike = async (
     });
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   return { liked: true };
 };
 
@@ -395,6 +488,7 @@ export const updateCommunityPost = async (
     .single();
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
   return data as CommunityPostRecord;
 };
 
@@ -405,6 +499,7 @@ export const deleteCommunityPost = async (postId: string): Promise<void> => {
     .eq('id', postId);
 
   if (error) throw error;
+  invalidateCommunityFeedCache();
 };
 
 export const getCurrentUserId = async (): Promise<string | null> => {
