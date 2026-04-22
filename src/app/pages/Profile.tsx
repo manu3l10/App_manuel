@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut, Loader2, X, U
 import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { syncCommunityProfile } from "../../lib/communityApi";
 
 export function Profile() {
   const navigate = useNavigate();
@@ -53,14 +54,38 @@ export function Profile() {
     user?.email?.[0]?.toUpperCase() ||
     "V";
 
-  const buildDefaultCommunityAvatar = () => {
+  const getCommunityAuthorName = (targetUser: any = user, fullNameOverride?: string) =>
+    fullNameOverride?.trim() ||
+    targetUser?.user_metadata?.full_name ||
+    targetUser?.user_metadata?.username ||
+    targetUser?.email?.split("@")[0] ||
+    "viajero";
+
+  const buildDefaultCommunityAvatarFor = (targetUser: any = user, fullNameOverride?: string) => {
     const seed =
-      user?.user_metadata?.username ||
-      user?.user_metadata?.full_name ||
-      user?.email?.split("@")[0] ||
+      targetUser?.user_metadata?.username ||
+      fullNameOverride?.trim() ||
+      targetUser?.user_metadata?.full_name ||
+      targetUser?.email?.split("@")[0] ||
       "viajero";
 
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(String(seed))}`;
+  };
+
+  const syncCommunityProfileOrAlert = async (params: {
+    targetUser: any;
+    authorAvatar: string;
+    fullNameOverride?: string;
+  }) => {
+    try {
+      await syncCommunityProfile({
+        authorName: getCommunityAuthorName(params.targetUser, params.fullNameOverride),
+        authorAvatar: params.authorAvatar,
+      });
+    } catch (error: any) {
+      console.error("Error syncing community profile:", error);
+      alert(error?.message ?? "La foto se actualizó, pero no se pudo sincronizar en la comunidad.");
+    }
   };
 
   const getAvatarStoragePath = (avatarUrl: string) => {
@@ -131,16 +156,10 @@ export function Profile() {
       return;
     }
 
-    await Promise.all([
-      supabase
-        .from("community_posts")
-        .update({ author_avatar: avatarUrl })
-        .eq("user_id", user.id),
-      supabase
-        .from("community_comments")
-        .update({ author_avatar: avatarUrl })
-        .eq("user_id", user.id),
-    ]);
+    await syncCommunityProfileOrAlert({
+      targetUser: data.user,
+      authorAvatar: avatarUrl,
+    });
 
     setUser(data.user);
     setAvatarUploading(false);
@@ -168,18 +187,12 @@ export function Profile() {
       return;
     }
 
-    const defaultAvatar = buildDefaultCommunityAvatar();
+    const defaultAvatar = buildDefaultCommunityAvatarFor(data.user);
 
-    await Promise.all([
-      supabase
-        .from("community_posts")
-        .update({ author_avatar: defaultAvatar })
-        .eq("user_id", user.id),
-      supabase
-        .from("community_comments")
-        .update({ author_avatar: defaultAvatar })
-        .eq("user_id", user.id),
-    ]);
+    await syncCommunityProfileOrAlert({
+      targetUser: data.user,
+      authorAvatar: defaultAvatar,
+    });
 
     const storagePath = getAvatarStoragePath(currentAvatarUrl);
     if (storagePath) {
@@ -203,6 +216,16 @@ export function Profile() {
     if (error) {
       alert("Error actualizando perfil: " + error.message);
     } else {
+      const authorAvatar =
+        data.user?.user_metadata?.avatar_url ||
+        data.user?.user_metadata?.picture ||
+        buildDefaultCommunityAvatarFor(data.user, nameInput);
+
+      await syncCommunityProfileOrAlert({
+        targetUser: data.user,
+        authorAvatar,
+        fullNameOverride: nameInput,
+      });
       setUser(data.user);
       setIsEditing(false);
     }

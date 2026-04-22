@@ -246,6 +246,19 @@ export const invalidateCommunityFeedCache = () => {
   communityFeedRequest = null;
 };
 
+export const syncCommunityProfile = async (payload: {
+  authorName: string;
+  authorAvatar: string;
+}): Promise<void> => {
+  const { error } = await supabase.rpc('sync_community_profile', {
+    p_author_name: payload.authorName,
+    p_author_avatar: payload.authorAvatar,
+  });
+
+  if (error) throw error;
+  invalidateCommunityFeedCache();
+};
+
 export const loadCommunityFeed = async (
   options: { forceRefresh?: boolean } = {}
 ): Promise<CommunityFeedSnapshot> => {
