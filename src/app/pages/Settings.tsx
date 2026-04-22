@@ -61,7 +61,7 @@ export function Settings() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-slate-950 text-white overflow-x-hidden">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px]" />
@@ -69,7 +69,10 @@ export function Settings() {
       </div>
 
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-slate-950/40 backdrop-blur-xl border-b border-white/5">
+      <div
+        className="sticky top-0 z-30 bg-slate-950/40 backdrop-blur-xl border-b border-white/5"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -82,7 +85,10 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="relative z-10 max-w-xl mx-auto px-4 py-8">
+      <div
+        className="relative z-10 max-w-xl mx-auto w-full overflow-x-hidden px-4 py-8"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 2rem)" }}
+      >
         {settingsSections.map((section, sectionIndex) => (
           <motion.div
             key={section.title}
@@ -162,7 +168,13 @@ export function Settings() {
       {/* Language Selection Modal */}
       <AnimatePresence>
         {showLangModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+            style={{
+              paddingTop: "calc(var(--safe-top) + 0.75rem)",
+              paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+            }}
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -174,7 +186,8 @@ export function Settings() {
               initial={{ y: "100%", opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
-              className="relative w-full max-w-sm bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
+              className="relative w-full max-w-sm overflow-y-auto overscroll-contain bg-slate-900 border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl"
+              style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
             >
               <div className="p-5 flex items-center justify-between border-b border-white/5">
                 <h3 className="font-bold text-lg">{t('settings.language')}</h3>

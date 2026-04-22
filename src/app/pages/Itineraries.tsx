@@ -194,9 +194,12 @@ export function Itineraries() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      <div
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -209,7 +212,10 @@ export function Itineraries() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div
+        className="max-w-4xl mx-auto w-full overflow-x-hidden px-4 py-6"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 1.5rem)" }}
+      >
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -371,11 +377,11 @@ export function Itineraries() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 mb-2">Vuelos por fecha</p>
                       <div className="space-y-2">
                         {itinerary.details.flights.map((flight) => (
-                          <div key={`${flight.date}-${flight.route}`} className="flex items-start gap-2 text-xs text-gray-700">
-                            <Plane className="w-3.5 h-3.5 mt-0.5 text-blue-600" />
-                            <div>
-                              <p className="font-medium">{flight.date} • {flight.route}</p>
-                              <p>{flight.airline} • {flight.time} • {flight.price}</p>
+                          <div key={`${flight.date}-${flight.route}`} className="flex min-w-0 items-start gap-2 text-xs text-gray-700">
+                            <Plane className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-600" />
+                            <div className="min-w-0">
+                              <p className="break-words font-medium">{flight.date} • {flight.route}</p>
+                              <p className="break-words">{flight.airline} • {flight.time} • {flight.price}</p>
                             </div>
                           </div>
                         ))}
@@ -385,11 +391,11 @@ export function Itineraries() {
                     {itinerary.details.hotel ? (
                       <div className="pt-2 border-t border-purple-100">
                         <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 mb-2">Hotel asignado</p>
-                        <div className="flex items-start gap-2 text-xs text-gray-700">
-                          <Building2 className="w-3.5 h-3.5 mt-0.5 text-pink-600" />
-                          <div>
-                            <p className="font-medium">{itinerary.details.hotel.name}</p>
-                            <p>
+                        <div className="flex min-w-0 items-start gap-2 text-xs text-gray-700">
+                          <Building2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-pink-600" />
+                          <div className="min-w-0">
+                            <p className="break-words font-medium">{itinerary.details.hotel.name}</p>
+                            <p className="break-words">
                               {itinerary.details.hotel.location} • {itinerary.details.hotel.checkIn} al {itinerary.details.hotel.checkOut}
                             </p>
                             <p>{itinerary.details.hotel.pricePerNight} por noche</p>
@@ -444,11 +450,18 @@ export function Itineraries() {
       </div>
 
       {viewingItinerary && (
-        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+          style={{
+            paddingTop: "calc(var(--safe-top) + 0.75rem)",
+            paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+          }}
+        >
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-purple-100"
+            className="w-full max-w-3xl overflow-y-auto overscroll-contain bg-white rounded-2xl shadow-2xl border border-purple-100"
+            style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
           >
             <div className="relative h-48 overflow-hidden">
               <img
@@ -555,11 +568,18 @@ export function Itineraries() {
       )}
 
       {editingItinerary && (
-        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+          style={{
+            paddingTop: "calc(var(--safe-top) + 0.75rem)",
+            paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+          }}
+        >
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-purple-100"
+            className="w-full max-w-2xl overflow-y-auto overscroll-contain bg-white rounded-2xl shadow-2xl border border-purple-100"
+            style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
           >
             <div className="sticky top-0 bg-white/95 backdrop-blur-xl border-b border-purple-100 p-5 flex items-start justify-between gap-4">
               <div>
@@ -594,10 +614,10 @@ export function Itineraries() {
                 {editingItinerary.details?.flights?.length ? (
                   <div className="space-y-2">
                     {editingItinerary.details.flights.map((flight, index) => (
-                      <div key={`${flight.date}-${flight.route}-${index}`} className="rounded-lg bg-white border border-blue-100 p-3 flex items-start justify-between gap-3">
-                        <div className="text-sm text-slate-700">
-                          <p className="font-medium text-slate-900">{flight.route}</p>
-                          <p className="text-xs mt-1">{flight.date} • {flight.airline} • {flight.time}</p>
+                      <div key={`${flight.date}-${flight.route}-${index}`} className="rounded-lg bg-white border border-blue-100 p-3 flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0 text-sm text-slate-700">
+                          <p className="break-words font-medium text-slate-900">{flight.route}</p>
+                          <p className="mt-1 break-words text-xs">{flight.date} • {flight.airline} • {flight.time}</p>
                           <p className="text-xs text-blue-700 mt-1">{flight.price}</p>
                         </div>
                         <button
@@ -629,10 +649,10 @@ export function Itineraries() {
                 </div>
 
                 {editingItinerary.details?.hotel ? (
-                  <div className="rounded-lg bg-white border border-purple-100 p-3 flex items-start justify-between gap-3">
-                    <div className="text-sm text-slate-700">
-                      <p className="font-medium text-slate-900">{editingItinerary.details.hotel.name}</p>
-                      <p className="text-xs mt-1">
+                  <div className="rounded-lg bg-white border border-purple-100 p-3 flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 text-sm text-slate-700">
+                      <p className="break-words font-medium text-slate-900">{editingItinerary.details.hotel.name}</p>
+                      <p className="mt-1 break-words text-xs">
                         {editingItinerary.details.hotel.location} • {editingItinerary.details.hotel.checkIn} al {editingItinerary.details.hotel.checkOut}
                       </p>
                       <p className="text-xs text-purple-700 mt-1">{editingItinerary.details.hotel.pricePerNight} por noche</p>

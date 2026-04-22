@@ -256,9 +256,12 @@ export function Profile() {
   const badges: any[] = [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      <div
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -279,7 +282,13 @@ export function Profile() {
       {/* Editing Modal */}
       <AnimatePresence>
         {isEditing && (
-          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-end md:items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+            style={{
+              paddingTop: "calc(var(--safe-top) + 0.75rem)",
+              paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+            }}
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -291,7 +300,8 @@ export function Profile() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              className="relative w-full max-w-lg bg-white rounded-t-[32px] md:rounded-[32px] p-6 md:p-8 shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg overflow-y-auto overscroll-contain bg-white rounded-t-[32px] md:rounded-[32px] p-6 md:p-8 shadow-2xl"
+              style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
             >
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-bold text-gray-900">Configuración Perfil</h2>
@@ -358,7 +368,10 @@ export function Profile() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div
+        className="max-w-4xl mx-auto w-full overflow-x-hidden px-4 py-6"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 1.5rem)" }}
+      >
         {/* Profile Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -415,13 +428,13 @@ export function Profile() {
             </div>
 
             {/* Name */}
-            <h2 className="text-2xl font-semibold text-gray-900 mb-1">
+            <h2 className="max-w-full break-words text-2xl font-semibold text-gray-900 mb-1">
               {user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('menu.user')}
             </h2>
-            <p className="text-gray-600 mb-4">{user?.email || "@traveler"}</p>
+            <p className="max-w-full break-words text-gray-600 mb-4">{user?.email || "@traveler"}</p>
 
             {/* Bio */}
-            <p className="text-gray-700 max-w-md mb-6 leading-relaxed">
+            <p className="max-w-md break-words text-gray-700 mb-6 leading-relaxed">
               {user?.user_metadata?.bio || "✈️ Amante de los viajes y las aventuras. Explorando el mundo un destino a la vez 🌍"}
             </p>
 

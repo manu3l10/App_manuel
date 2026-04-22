@@ -176,9 +176,12 @@ export function Calendar() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      <div
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -191,7 +194,10 @@ export function Calendar() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div
+        className="max-w-4xl mx-auto w-full overflow-x-hidden px-4 py-6"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 1.5rem)" }}
+      >
         {/* Calendar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -318,7 +324,7 @@ export function Calendar() {
                 transition={{ delay: index * 0.1 }}
                 className="bg-white/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-lg border border-white/20"
               >
-                <div className="flex">
+                <div className="flex min-w-0">
                   {/* Image */}
                   <div className="w-32 h-32 flex-shrink-0">
                     <img
@@ -329,22 +335,22 @@ export function Calendar() {
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1 p-4 flex flex-col justify-between">
+                  <div className="min-w-0 flex-1 p-4 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <MapPin className={`w-4 h-4 text-${trip.color}-600`} />
-                        <h3 className="font-semibold text-gray-900">{trip.destination}</h3>
+                      <div className="flex min-w-0 items-center gap-2 mb-2">
+                        <MapPin className={`w-4 h-4 flex-shrink-0 text-${trip.color}-600`} />
+                        <h3 className="min-w-0 truncate font-semibold text-gray-900">{trip.destination}</h3>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>{trip.dates}</span>
+                      <div className="flex min-w-0 items-center gap-2 text-sm text-gray-600">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        <span className="min-w-0 truncate">{trip.dates}</span>
                       </div>
                       {trip.details?.flights?.length ? (
                         <div className="mt-2 space-y-2">
                           {trip.details.flights.map((flight) => (
-                            <div key={`${trip.id}-${flight.date}-${flight.route}`} className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 p-1.5">
-                              <img src={AIRPORT_IMAGE} alt="Aeropuerto" className="w-8 h-8 rounded-md object-cover" />
-                              <p className="text-xs text-blue-700">
+                            <div key={`${trip.id}-${flight.date}-${flight.route}`} className="flex min-w-0 items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 p-1.5">
+                              <img src={AIRPORT_IMAGE} alt="Aeropuerto" className="w-8 h-8 flex-shrink-0 rounded-md object-cover" />
+                              <p className="min-w-0 break-words text-xs text-blue-700">
                                 ✈️ {flight.date} • {flight.route} • {flight.time}
                               </p>
                             </div>
@@ -355,13 +361,13 @@ export function Calendar() {
                       )}
 
                       {trip.details?.hotel && (
-                        <div className="mt-2 flex items-center gap-2 rounded-lg border border-[#d8d4ff] bg-[#f2f0ff] p-1.5">
+                        <div className="mt-2 flex min-w-0 items-center gap-2 rounded-lg border border-[#d8d4ff] bg-[#f2f0ff] p-1.5">
                           <img
                             src={trip.details.hotel.image || HOTEL_FALLBACK_IMAGE}
                             alt={trip.details.hotel.name}
-                            className="w-8 h-8 rounded-md object-cover"
+                            className="w-8 h-8 flex-shrink-0 rounded-md object-cover"
                           />
-                          <p className="text-xs text-[#4d3ea8]">
+                          <p className="min-w-0 break-words text-xs text-[#4d3ea8]">
                             🏨 {trip.details.hotel.name} • {trip.details.hotel.checkIn} al {trip.details.hotel.checkOut}
                           </p>
                         </div>
@@ -392,8 +398,17 @@ export function Calendar() {
       </div>
 
       {selectedDetails && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 p-5">
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+          style={{
+            paddingTop: "calc(var(--safe-top) + 0.75rem)",
+            paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+          }}
+        >
+          <div
+            className="w-full max-w-lg overflow-y-auto overscroll-contain bg-white rounded-2xl shadow-2xl border border-slate-200 p-5"
+            style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-900">{selectedDetails.title}</h3>
               <button

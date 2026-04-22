@@ -137,9 +137,12 @@ export function Favorites() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      <div
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -152,7 +155,10 @@ export function Favorites() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div
+        className="max-w-4xl mx-auto w-full overflow-x-hidden px-4 py-6"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 1.5rem)" }}
+      >
         {/* Filters */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           <motion.button
@@ -280,12 +286,12 @@ export function Favorites() {
 
                 {/* Content */}
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 mb-1">{favorite.name}</h3>
-                  <div className="flex items-center gap-1 text-gray-600 text-sm mb-2">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>{favorite.location}</span>
+                  <h3 className="break-words font-semibold text-gray-900 mb-1">{favorite.name}</h3>
+                  <div className="flex min-w-0 items-center gap-1 text-gray-600 text-sm mb-2">
+                    <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="min-w-0 truncate">{favorite.location}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{favorite.description}</p>
+                  <p className="break-words text-xs text-gray-500">{favorite.description}</p>
                 </div>
               </motion.div>
             );
