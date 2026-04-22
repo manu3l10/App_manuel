@@ -699,8 +699,11 @@ export function Community() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+      <div
+        className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm"
+        style={{ paddingTop: "var(--safe-top)" }}
+      >
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/", { state: { openMenu: true } })}
@@ -718,7 +721,10 @@ export function Community() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto pb-6">
+      <div
+        className="max-w-2xl mx-auto w-full overflow-x-hidden pb-6"
+        style={{ paddingBottom: "calc(var(--safe-bottom) + 1.5rem)" }}
+      >
         {isLoading && (
           <div className="p-8 text-center text-gray-500">Cargando publicaciones...</div>
         )}
@@ -747,22 +753,22 @@ export function Community() {
             transition={{ duration: 0.2 }}
             className="bg-white mb-6 border-b border-gray-100 last:border-b-0"
           >
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="px-4 py-3 flex min-w-0 items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <img
                   src={post.avatar}
                   alt={post.username}
-                  className="w-10 h-10 rounded-full border-2 border-purple-200"
+                  className="w-10 h-10 flex-shrink-0 rounded-full border-2 border-purple-200"
                 />
-                <div>
-                  <p className="font-semibold text-gray-900">{post.username}</p>
-                  <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <MapPin className="w-3 h-3" />
-                    <span>{post.location}</span>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-900">{post.username}</p>
+                  <div className="flex min-w-0 items-center gap-1 text-xs text-gray-600">
+                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                    <span className="min-w-0 truncate">{post.location}</span>
                   </div>
                 </div>
               </div>
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setActivePostMenu((current) => (current === post.id ? null : post.id))}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -842,7 +848,7 @@ export function Community() {
               </div>
 
               <p className="font-semibold text-sm text-gray-900 mb-1">{post.likes.toLocaleString()} me gusta</p>
-              <p className="text-sm text-gray-900">
+              <p className="break-words text-sm text-gray-900">
                 <span className="font-semibold">{post.username}</span> {post.caption}
               </p>
               {post.comments > 0 && (
@@ -859,8 +865,8 @@ export function Community() {
                   {post.commentList.length > 0 ? (
                     post.commentList.map((comment) => (
                       <div key={comment.id} className="space-y-2">
-                        <div className="text-sm text-gray-800">
-                          <p>
+                        <div className="min-w-0 text-sm text-gray-800">
+                          <p className="break-words">
                             <span className="font-semibold">{comment.username}</span> {comment.text}
                           </p>
                           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
@@ -884,8 +890,8 @@ export function Community() {
                         {comment.replies.length > 0 && (
                           <div className="ml-5 space-y-2 border-l border-purple-100 pl-3">
                             {comment.replies.map((reply) => (
-                              <div key={reply.id} className="text-sm text-gray-800">
-                                <p>
+                              <div key={reply.id} className="min-w-0 text-sm text-gray-800">
+                                <p className="break-words">
                                   <span className="font-semibold">{reply.username}</span> {reply.text}
                                 </p>
                                 <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
@@ -904,7 +910,7 @@ export function Community() {
                         )}
 
                         {replyingTo[post.id] === comment.id && (
-                          <div className="ml-5 flex items-center gap-2">
+                          <div className="ml-5 flex min-w-0 items-center gap-2">
                             <input
                               value={replyInputs[comment.id] ?? ""}
                               onChange={(event) => setReplyInputs((prev) => ({ ...prev, [comment.id]: event.target.value }))}
@@ -912,7 +918,7 @@ export function Community() {
                                 if (event.key === "Enter") addReply(post.id, comment.id);
                               }}
                               placeholder={`Responder a ${comment.username}...`}
-                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
+                              className="min-w-0 flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                             />
                             <button
                               onClick={() => addReply(post.id, comment.id)}
@@ -931,7 +937,7 @@ export function Community() {
                 </div>
               )}
 
-              <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+              <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-gray-100 pt-3">
                 <input
                   value={commentInputs[post.id] ?? ""}
                   onChange={(event) => setCommentInputs((prev) => ({ ...prev, [post.id]: event.target.value }))}
@@ -939,7 +945,7 @@ export function Community() {
                     if (event.key === "Enter") addComment(post.id);
                   }}
                   placeholder="Añade un comentario..."
-                  className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
+                  className="min-w-0 flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                 />
                 <button
                   onClick={() => addComment(post.id)}
