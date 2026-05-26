@@ -741,92 +741,106 @@ export function AIChat() {
     pendingChatActionRef.current = false;
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
-    const userMessage = { type: "user", content: input };
+    const userMessage = { type: "user" as const, content: input };
     setMessages((prev) => [...prev, userMessage]);
-
-    setTimeout(() => {
-      const lowerInput = input.toLowerCase();
-      const isEjePrompt = lowerInput.includes("eje cafetero") || lowerInput.includes("salento") || lowerInput.includes("cafetero");
-      const isHotelPrompt =
-        lowerInput.includes("hotel") ||
-        lowerInput.includes("hote") ||
-        lowerInput.includes("hosped") ||
-        lowerInput.includes("quedar");
-      let aiResponse: any = {
-        type: "ai",
-        content: t('chat.aiResponsePrefix'),
-      };
-
-      if (isHotelPrompt) {
-        const lastTripId = getLastTripId();
-        const lastTripDetails = lastTripId ? getItineraryDetails(lastTripId) : null;
-        aiResponse.content = lastTripDetails?.flights?.length
-          ? "Claro. ¿Quieres que también agendemos hotel para las fechas de tu último viaje al Eje Cafetero?"
-          : "Para agendar hotel primero necesito que aceptes vuelos del Eje Cafetero y sus fechas.";
-        aiResponse.card = lastTripDetails?.flights?.length && lastTripId ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <button
-              onClick={() =>
-                showHotelOptionsForTrip({
-                  type: "hotel",
-                  tripId: lastTripId,
-                  destination: "Eje Cafetero (Salento, Filandia y Pereira)",
-                  startDate: lastTripDetails.flights[0]?.date ?? "",
-                  endDate: lastTripDetails.flights[lastTripDetails.flights.length - 1]?.date ?? "",
-                })
-              }
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-            >
-              Sí, agendar hotel
-            </button>
-            <button
-              onClick={() => declineHotelsForNow(`decline-hotels:${lastTripId}`)}
-              className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
-            >
-              No, por ahora
-            </button>
-          </div>
-        ) : undefined;
-      } else if (isEjePrompt) {
-        aiResponse.content =
-          "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?";
-        aiResponse.card = (
-          <DatePickerCard onConfirm={showFlightOptionsForDates} />
-        );
-      } else {
-        aiResponse.content = "Hola, solo puedo agendar viajes al Eje Cafetero por el momento.";
-        aiResponse.card = (
-          <button
-            onClick={() => {
-              void runChatActionOnce("start-eje-flow", () => {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  type: "user",
-                  content: "Quiero viajar al Eje Cafetero",
-                },
-                {
-                  type: "ai",
-                  content: "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?",
-                  card: <DatePickerCard onConfirm={showFlightOptionsForDates} />,
-                },
-              ]);
-              });
-            }}
-            className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-          >
-            Agendar viaje al Eje Cafetero
-          </button>
-        );
-      }
-      setMessages((prev) => [...prev, aiResponse]);
-
-    }, 1000);
-
+    
+    const currentInput = input;
     setInput("");
+
+    // Set up chat history for Groq
+    let chatHistory = [
+      { role: "system", content: "Eres un asistente de viajes avanzado. Tu tarea principal es ayudar a los usuarios con sus viajes. Tienes acceso a herramientas para buscar alojamientos reales en Airbnb (search_airbnb_prices) y modificar viajes existentes en la base de datos Supabase (update_trip_in_supabase). Si te piden buscar Airbnb, usa la herramienta. Si te piden modificar su viaje en la app, pídele el ID del viaje si no lo sabes, o actualiza los datos si ya los tienes. Para la fecha siempre asume que estamos en el año actual si no te dicen nada." },
+      ...messages.map(m => ({ role: m.type === "ai" ? "assistant" : "user", content: m.content || "" })),
+      { role: "user", content: currentInput }
+    ];
+
+    setMessages(prev => [...prev, { type: "ai", content: "Pensando..." }]);
+
+    const runChatLoop = async (history: any[]) => {
+      try {
+        const res = await fetch('http://localhost:3001/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history })
+        });
+        const msg = await res.json();
+        
+        if (msg.tool_calls) {
+           let newHistory = [...history, msg];
+           for (const tool of msg.tool_calls) {
+              const name = tool.function.name;
+              const args = JSON.parse(tool.function.arguments);
+              
+              if (name === "search_airbnb_prices") {
+                 setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: `Buscando alojamientos en Airbnb para ${args.location}...` }]);
+                 
+                 const airbnbRes = await fetch('http://localhost:3001/api/airbnb/search', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ location: args.location, checkin: args.checkin, checkout: args.checkout })
+                 });
+                 const airbnbData = await airbnbRes.json();
+                 newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify(airbnbData.searchResults?.slice(0,3) || []) });
+                 
+                 // Render cards immediately to show the result
+                 const results = airbnbData.searchResults?.slice(0, 3) || [];
+                 if (results.length > 0) {
+                   const cardNode = (
+                     <div className="space-y-4">
+                       {results.map((r: any) => {
+                          const desc = typeof r.demandStayListing?.description === 'string' ? r.demandStayListing.description : "Alojamiento increíble";
+                          const loc = typeof r.structuredContent?.primaryLine?.body === 'string' ? r.structuredContent.primaryLine.body : "";
+                          const price = r.structuredDisplayPrice?.primaryLine?.accessibilityLabel || r.structuredDisplayPrice?.secondaryLine?.accessibilityLabel || "Ver precio en la app";
+                          return (
+                            <div key={r.id} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white">
+                              <h4 className="font-bold text-cyan-300">{desc}</h4>
+                              <p className="text-xs text-gray-300 mt-1">{loc}</p>
+                              <p className="text-sm mt-2 font-medium">{price}</p>
+                              <a href={r.url} target="_blank" rel="noreferrer" className="text-blue-400 text-xs mt-2 inline-block hover:underline">Ver en Airbnb →</a>
+                            </div>
+                          );
+                       })}
+                     </div>
+                   );
+                   setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: "¡Aquí tienes algunas opciones de Airbnb!", card: cardNode }, { type: "ai", content: "Procesando opciones..." }]);
+                 }
+              } else if (name === "update_trip_in_supabase") {
+                 setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: `Actualizando viaje en la base de datos...` }]);
+                 
+                 const updates: any = {};
+                 if (args.destination) updates.destination = args.destination;
+                 if (args.start_date) updates.start_date = args.start_date;
+                 if (args.end_date) updates.end_date = args.end_date;
+                 if (args.budget) updates.budget = args.budget;
+                 
+                 const { error } = await supabase.from('trips').update(updates).eq('id', args.trip_id);
+                 
+                 if (error) {
+                    newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify({ success: false, error: error.message }) });
+                 } else {
+                    newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify({ success: true }) });
+                 }
+              }
+           }
+           // Follow up call with tool results
+           await runChatLoop(newHistory);
+        } else if (msg.content) {
+           setMessages(prev => {
+             // Remove the loading message and add the final response
+             const filtered = prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones...");
+             return [...filtered, { type: "ai", content: msg.content }];
+           });
+        }
+      } catch(err) {
+        console.error(err);
+        setMessages(prev => [...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..."), { type: "ai", content: "Hubo un error al comunicarme con el asistente de inteligencia artificial." }]);
+      }
+    };
+    
+    await runChatLoop(chatHistory);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
