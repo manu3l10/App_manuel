@@ -349,36 +349,47 @@ export function AIChat() {
   };
 
   const saveHotelOptionForTrip = (request: ChatChangeRequest, option: HotelOption) => {
-    void runChatActionOnce(`change-hotel:${request.tripId}`, () => {
-    const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
-    const hotel: HotelStay = {
-      name: option.name,
-      location: option.location,
-      checkIn: request.startDate,
-      checkOut: request.endDate,
-      pricePerNight: option.pricePerNight,
-      image: option.image,
-    };
-    saveItineraryDetails(request.tripId, {
-      ...previousDetails,
-      hotel,
-    });
-    setLastTripId(request.tripId);
-    setMessages((prev) => [
-      ...prev,
-      {
-        type: "ai",
-        content: `Listo. Cambié el hotel a "${option.name}" en tu itinerario.`,
-        card: (
-          <button
-            onClick={() => navigate("/itineraries")}
-            className="w-full md:w-auto bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-          >
-            Ver itinerario actualizado
-          </button>
-        ),
-      },
-    ]);
+    // At click time, resolve the real tripId (may have been created AFTER the card rendered)
+    const resolvedTripId = request.tripId !== "temp_trip" ? request.tripId : (getLastTripId() ?? request.tripId);
+    const actionKey = `change-hotel:${resolvedTripId}:${option.name}`;
+    void runChatActionOnce(actionKey, () => {
+      const previousDetails = getItineraryDetails(resolvedTripId) ?? { flights: [], hotel: null };
+      const hotel: HotelStay = {
+        name: option.name,
+        location: option.location,
+        checkIn: request.startDate,
+        checkOut: request.endDate,
+        pricePerNight: option.pricePerNight,
+        image: option.image,
+      };
+      saveItineraryDetails(resolvedTripId, {
+        ...previousDetails,
+        hotel,
+      });
+      setLastTripId(resolvedTripId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "ai",
+          content: `🏨 Listo. Guardé el hotel "${option.name}" en tu itinerario. Ya aparece en el calendario.`,
+          card: (
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate("/itineraries")}
+                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+              >
+                Ver mis viajes
+              </button>
+              <button
+                onClick={() => navigate("/calendar")}
+                className="flex-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+              >
+                Ver calendario
+              </button>
+            </div>
+          ),
+        },
+      ]);
     });
   };
 
@@ -586,37 +597,21 @@ export function AIChat() {
       ...prev,
       {
         type: "ai",
-        content: "Listo. Guardé los vuelos en Mis itinerarios. ¿Quieres que también agendemos hotel para esas fechas?",
+        content: `✈️ ¡Vuelos guardados en tu itinerario! Si quieres agregar hotel, selecciona una opción de las tarjetas de alojamiento que aparecen arriba.`,
         card: (
-          <div className="space-y-3">
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate("/itineraries")}
+              className="flex-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+            >
+              Ver mis viajes
+            </button>
             <button
               onClick={() => navigate("/calendar")}
-              className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+              className="flex-1 bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
             >
-              Ver Calendario
+              Ver calendario
             </button>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() =>
-                  showHotelOptionsForTrip({
-                    type: "hotel",
-                    tripId: insertedTrip.id,
-                    destination: payload.destination,
-                    startDate: payload.startDate,
-                    endDate: payload.endDate,
-                  })
-                }
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-              >
-                Sí, agendar hotel
-              </button>
-              <button
-                onClick={() => declineHotelsForNow(`decline-hotels:${insertedTrip.id}`)}
-                className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
-              >
-                No, por ahora
-              </button>
-            </div>
           </div>
         ),
       },
@@ -752,7 +747,10 @@ export function AIChat() {
 
     // Set up chat history for Groq
     let chatHistory = [
-      { role: "system", content: "Eres un asistente de viajes avanzado. Tu tarea principal es ayudar a los usuarios con sus viajes. Tienes acceso a herramientas para buscar alojamientos reales en Airbnb (search_airbnb_prices) y modificar viajes existentes en la base de datos Supabase (update_trip_in_supabase). Si te piden buscar Airbnb, usa la herramienta. Si te piden modificar su viaje en la app, pídele el ID del viaje si no lo sabes, o actualiza los datos si ya los tienes. Para la fecha siempre asume que estamos en el año actual si no te dicen nada." },
+      { 
+        role: "system", 
+        content: "Eres un asistente de viajes avanzado enfocado en planificar viajes en Colombia. Tu tarea principal es ayudar a los usuarios con sus vuelos y alojamientos. Tienes acceso a herramientas para buscar vuelos en tiempo real usando Duffel (search_flights), alojamientos reales en Airbnb (search_airbnb_prices) y modificar viajes existentes en la base de datos Supabase (update_trip_in_supabase). Cuando el usuario te pida ir a un destino en Colombia con fechas específicas, debes buscar tanto vuelos como alojamientos (Airbnb) llamando a ambas herramientas. Si el usuario no te da una ciudad de origen para los vuelos, asume Bogotá (BOG) como origen predeterminado. Siempre asume el año 2026 para las fechas de viaje. Presenta un resumen cordial y deja que las tarjetas del sistema rendericen los detalles de vuelos y alojamientos. Responde siempre en español." 
+      },
       ...messages.map(m => ({ role: m.type === "ai" ? "assistant" : "user", content: m.content || "" })),
       { role: "user", content: currentInput }
     ];
@@ -770,73 +768,275 @@ export function AIChat() {
         
         if (msg.tool_calls) {
            let newHistory = [...history, msg];
+           
+           const pendingOutputs: { role: string, tool_call_id: string, name: string, content: string }[] = [];
+           const newAiMessages: ChatMessageItem[] = [];
+
+           // Let user know we are searching
+           setMessages(prev => [
+             ...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final..."),
+             { type: "ai", content: "Buscando información de vuelos y alojamientos..." }
+           ]);
+
            for (const tool of msg.tool_calls) {
               const name = tool.function.name;
               const args = JSON.parse(tool.function.arguments);
               
-              if (name === "search_airbnb_prices") {
-                 setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: `Buscando alojamientos en Airbnb para ${args.location}...` }]);
-                 
-                 const airbnbRes = await fetch('http://localhost:3001/api/airbnb/search', {
-                   method: 'POST',
-                   headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ location: args.location, checkin: args.checkin, checkout: args.checkout })
-                 });
-                 const airbnbData = await airbnbRes.json();
-                 newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify(airbnbData.searchResults?.slice(0,3) || []) });
-                 
-                 // Render cards immediately to show the result
-                 const results = airbnbData.searchResults?.slice(0, 3) || [];
-                 if (results.length > 0) {
-                   const cardNode = (
-                     <div className="space-y-4">
-                       {results.map((r: any) => {
-                          const desc = typeof r.demandStayListing?.description === 'string' ? r.demandStayListing.description : "Alojamiento increíble";
-                          const loc = typeof r.structuredContent?.primaryLine?.body === 'string' ? r.structuredContent.primaryLine.body : "";
-                          const price = r.structuredDisplayPrice?.primaryLine?.accessibilityLabel || r.structuredDisplayPrice?.secondaryLine?.accessibilityLabel || "Ver precio en la app";
-                          return (
-                            <div key={r.id} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white">
-                              <h4 className="font-bold text-cyan-300">{desc}</h4>
-                              <p className="text-xs text-gray-300 mt-1">{loc}</p>
-                              <p className="text-sm mt-2 font-medium">{price}</p>
-                              <a href={r.url} target="_blank" rel="noreferrer" className="text-blue-400 text-xs mt-2 inline-block hover:underline">Ver en Airbnb →</a>
-                            </div>
-                          );
-                       })}
-                     </div>
-                   );
-                   setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: "¡Aquí tienes algunas opciones de Airbnb!", card: cardNode }, { type: "ai", content: "Procesando opciones..." }]);
+              if (name === "search_flights") {
+                 try {
+                   const flightsRes = await fetch('http://localhost:3001/api/flights/search', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({
+                       origin_iata: args.origin_iata,
+                       destination_iata: args.destination_iata,
+                       departure_date: args.departure_date,
+                       return_date: args.return_date,
+                       adults: args.adults
+                     })
+                   });
+                   const flightsData = await flightsRes.json();
+                   const results = flightsData.searchResults || [];
+                   
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify(results)
+                   });
+
+                   if (results.length > 0) {
+                     const cardNode = (
+                       <div className="space-y-4 max-w-xl">
+                         {results.map((option: any) => (
+                           <div key={option.label} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3 shadow-xl">
+                             <div className="flex items-center justify-between gap-3">
+                               <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">{option.label}</h4>
+                               <span className="text-xs text-gray-300 font-mono">{option.budget}</span>
+                             </div>
+                             {option.flights.map((flight: any, fIdx: number) => (
+                               <div key={`${option.label}-${fIdx}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3 border border-white/5">
+                                 <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
+                                 <div className="flex-1">
+                                   <p className="text-sm font-medium">{flight.route}</p>
+                                   <p className="text-xs text-gray-300 mt-0.5">
+                                     {flight.date} • {flight.airline} • {flight.time}
+                                   </p>
+                                 </div>
+                               </div>
+                             ))}
+                             <button
+                               onClick={() =>
+                                 saveProposalToItineraries({
+                                   destination: `${args.destination_iata} (Duffel)`,
+                                   startDate: args.departure_date,
+                                   endDate: args.return_date || args.departure_date,
+                                   budget: option.budget,
+                                   details: {
+                                     flights: option.flights,
+                                     hotel: null,
+                                   },
+                                 })
+                               }
+                               disabled={savingProposal}
+                               className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                             >
+                               {savingProposal ? "Guardando..." : "Aceptar estos vuelos"}
+                             </button>
+                           </div>
+                         ))}
+                       </div>
+                     );
+                     
+                     newAiMessages.push({
+                       type: "ai",
+                       content: `✈️ Encontré estas opciones de vuelos reales en Duffel para ir a ${args.destination_iata}:`,
+                       card: cardNode
+                     });
+                   } else {
+                     newAiMessages.push({
+                       type: "ai",
+                       content: `✈️ No encontré vuelos disponibles de ${args.origin_iata || 'BOG'} a ${args.destination_iata} en las fechas seleccionadas.`
+                     });
+                   }
+                 } catch (fErr) {
+                   console.error("Flight search failed:", fErr);
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify({ error: String(fErr) })
+                   });
+                   newAiMessages.push({
+                     type: "ai",
+                     content: `✈️ Hubo un error al buscar vuelos: ${fErr instanceof Error ? fErr.message : String(fErr)}`
+                   });
                  }
-              } else if (name === "update_trip_in_supabase") {
-                 setMessages(prev => [...prev.slice(0, -1), { type: "ai", content: `Actualizando viaje en la base de datos...` }]);
-                 
-                 const updates: any = {};
-                 if (args.destination) updates.destination = args.destination;
-                 if (args.start_date) updates.start_date = args.start_date;
-                 if (args.end_date) updates.end_date = args.end_date;
-                 if (args.budget) updates.budget = args.budget;
-                 
-                 const { error } = await supabase.from('trips').update(updates).eq('id', args.trip_id);
-                 
-                 if (error) {
-                    newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify({ success: false, error: error.message }) });
-                 } else {
-                    newHistory.push({ role: "tool", tool_call_id: tool.id, name: name, content: JSON.stringify({ success: true }) });
+              }
+              
+              else if (name === "search_airbnb_prices") {
+                 try {
+                   const airbnbRes = await fetch('http://localhost:3001/api/airbnb/search', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ location: args.location, checkin: args.checkin, checkout: args.checkout })
+                   });
+                   const airbnbData = await airbnbRes.json();
+                   const results = airbnbData.searchResults?.slice(0, 3) || [];
+                   
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify(results)
+                   });
+
+                   if (results.length > 0) {
+                     const cardNode = (
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+                         {results.map((r: any) => {
+                            const desc = typeof r.demandStayListing?.description === 'string' ? r.demandStayListing.description : "Alojamiento increíble";
+                            const loc = typeof r.structuredContent?.primaryLine?.body === 'string' ? r.structuredContent.primaryLine.body : args.location;
+                            const priceLabel = r.structuredDisplayPrice?.primaryLine?.accessibilityLabel || r.structuredDisplayPrice?.secondaryLine?.accessibilityLabel || "Ver precio";
+                            
+                            let priceStr = "$150.000 COP";
+                            const match = priceLabel.match(/\$[0-9,.]+/);
+                            if (match) {
+                              priceStr = match[0];
+                            } else {
+                              priceStr = priceLabel;
+                            }
+
+                            const hotelImage = "https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080";
+
+                            const hotelOption: HotelOption = {
+                              name: desc.split(" in ")[0].slice(0, 45),
+                              location: loc,
+                              rating: 4.8,
+                              pricePerNight: priceStr,
+                              image: hotelImage,
+                              amenities: ["wifi", "breakfast"],
+                              highlights: ["Excelente ubicación", "Wifi de alta velocidad", priceLabel]
+                            };
+
+                            const tripRequest: ChatChangeRequest = {
+                              type: "hotel",
+                              tripId: getLastTripId() || "temp_trip",
+                              destination: args.location,
+                              startDate: args.checkin,
+                              endDate: args.checkout
+                            };
+
+                            return (
+                              <div key={r.id} className="space-y-3 bg-white/5 border border-white/10 rounded-2xl p-2 hover:bg-white/10 transition-colors shadow-lg">
+                                <HotelCard
+                                  name={hotelOption.name}
+                                  location={hotelOption.location}
+                                  rating={hotelOption.rating}
+                                  price={hotelOption.pricePerNight}
+                                  image={hotelOption.image}
+                                  amenities={hotelOption.amenities}
+                                />
+                                <div className="flex gap-2 p-1">
+                                  <a 
+                                    href={r.url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="flex-1 text-center bg-white/10 hover:bg-white/15 border border-white/20 text-white py-2 rounded-lg text-xs font-medium transition-colors"
+                                  >
+                                    Ver en Airbnb
+                                  </a>
+                                  <button
+                                    onClick={() => saveHotelOptionForTrip(tripRequest, hotelOption)}
+                                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 rounded-lg text-xs font-medium hover:shadow-lg transition-all"
+                                  >
+                                    Seleccionar
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                         })}
+                       </div>
+                     );
+                     
+                     newAiMessages.push({
+                       type: "ai",
+                       content: `🏨 Encontré estos alojamientos recomendados en Airbnb para ${args.location}:`,
+                       card: cardNode
+                     });
+                   } else {
+                     newAiMessages.push({
+                       type: "ai",
+                       content: `🏨 No encontré alojamientos en Airbnb para ${args.location} en las fechas especificadas.`
+                     });
+                   }
+                 } catch (aErr) {
+                   console.error("Airbnb search failed:", aErr);
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify({ error: String(aErr) })
+                   });
+                   newAiMessages.push({
+                     type: "ai",
+                     content: `🏨 Hubo un error al buscar alojamientos: ${aErr instanceof Error ? aErr.message : String(aErr)}`
+                   });
+                 }
+              }
+              
+              else if (name === "update_trip_in_supabase") {
+                 try {
+                   const updates: any = {};
+                   if (args.destination) updates.destination = args.destination;
+                   if (args.start_date) updates.start_date = args.start_date;
+                   if (args.end_date) updates.end_date = args.end_date;
+                   if (args.budget) updates.budget = args.budget;
+                   
+                   const { error } = await supabase.from('trips').update(updates).eq('id', args.trip_id);
+                   
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify({ success: !error, error: error?.message })
+                   });
+                   
+                   newAiMessages.push({
+                     type: "ai",
+                     content: error 
+                       ? `❌ Error al actualizar viaje: ${error.message}`
+                       : `✅ ¡Tu viaje ha sido actualizado con éxito!`
+                   });
+                 } catch (uErr) {
+                   console.error("Update trip failed:", uErr);
+                   pendingOutputs.push({
+                     role: "tool",
+                     tool_call_id: tool.id,
+                     name: name,
+                     content: JSON.stringify({ error: String(uErr) })
+                   });
                  }
               }
            }
-           // Follow up call with tool results
+
+           newHistory.push(...pendingOutputs);
+
+           setMessages(prev => {
+             const filtered = prev.filter(p => p.content !== "Buscando información de vuelos y alojamientos...");
+             return [...filtered, ...newAiMessages, { type: "ai", content: "Procesando respuesta final..." }];
+           });
+
            await runChatLoop(newHistory);
         } else if (msg.content) {
            setMessages(prev => {
-             // Remove the loading message and add the final response
-             const filtered = prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones...");
+             const filtered = prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final...");
              return [...filtered, { type: "ai", content: msg.content }];
            });
         }
       } catch(err) {
         console.error(err);
-        setMessages(prev => [...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..."), { type: "ai", content: "Hubo un error al comunicarme con el asistente de inteligencia artificial." }]);
+        setMessages(prev => [...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final..."), { type: "ai", content: "Hubo un error al comunicarme con el asistente de inteligencia artificial." }]);
       }
     };
     
