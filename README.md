@@ -20,10 +20,10 @@ PWA de asistencia de viajes construida con React, Vite y Supabase. La app combin
 
 ## Dominio oficial
 
-- Produccion: `https://mta-oficial.vercel.app`
-- Proyecto Vercel: `mta-oficial`
-- Supabase Auth debe tener como `Site URL` `https://mta-oficial.vercel.app`.
-- Redirect URLs permitidas: `https://mta-oficial.vercel.app`, `https://mta-oficial.vercel.app/` y `http://localhost:5173` solo para desarrollo local.
+- Produccion: `https://appmta.vercel.app`
+- Proyecto Vercel: `appmta`
+- Supabase Auth debe tener como `Site URL` `https://appmta.vercel.app`.
+- Redirect URLs permitidas: `https://appmta.vercel.app`, `https://appmta.vercel.app/` y `http://localhost:5173` solo para desarrollo local.
 
 No uses dominios anteriores para nuevos cambios o pruebas de produccion.
 
@@ -87,6 +87,7 @@ La app puede leer estas variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_SITE_URL`
 
 Si no estan definidas, el cliente conserva el proyecto de Supabase actualmente configurado en el codigo para no romper el entorno existente del equipo.
 

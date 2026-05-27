@@ -1,12 +1,13 @@
 import { motion, AnimatePresence } from "motion/react";
 import { Mail, Lock, UserPlus, LogIn, Loader2, Check } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type FocusEvent, type FormEvent } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import {
   getRememberAccountPreference,
   setRememberAccountPreference,
   supabase,
 } from "../../lib/supabase";
+import { getAuthRedirectUrl } from "../../lib/siteUrl";
 
 const OAUTH_ERROR_KEYS = ["error", "error_code", "error_description"];
 
@@ -62,17 +63,12 @@ function clearOAuthErrorFromUrl() {
   window.history.replaceState({}, document.title, nextUrl);
 }
 
-function getOAuthRedirectUrl() {
-  const url = new URL(window.location.href);
-  url.hash = "";
-  url.search = "";
-  return url.toString();
-}
-
 function isAndroidEmbeddedBrowser() {
   const userAgent = navigator.userAgent || "";
   const isAndroid = /Android/i.test(userAgent);
-  const isWebView = /\bwv\b|; wv\)/i.test(userAgent) || /Version\/[\d.]+ Chrome\/[\d.]+ Mobile Safari\/[\d.]+/i.test(userAgent);
+  const isWebView =
+    /\bwv\b|; wv\)/i.test(userAgent) ||
+    /Version\/[\d.]+ Chrome\/[\d.]+ Mobile Safari\/[\d.]+/i.test(userAgent);
   const isInAppBrowser = /Instagram|FBAN|FBAV|FB_IAB|Line\/|Messenger|Snapchat|TikTok/i.test(userAgent);
 
   return isAndroid && (isWebView || isInAppBrowser);
@@ -85,13 +81,42 @@ function MtaLogo() {
       <div className="absolute inset-[3px] rounded-[25px] bg-slate-950/95" />
       <div className="absolute inset-[9px] rounded-[20px] border border-white/15 bg-gradient-to-br from-white/12 to-white/[0.03]" />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-white text-[30px] md:text-[34px] font-black tracking-normal leading-none">
+        <span className="text-white text-[30px] font-black leading-none tracking-normal md:text-[34px]">
           MTA
         </span>
         <span className="mt-1 h-1 w-12 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/40" />
       </div>
     </div>
   );
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getAuthErrorMessage(error: unknown) {
+  const rawMessage =
+    typeof error === "object" && error && "message" in error
+      ? String((error as { message?: string }).message ?? "")
+      : "No se pudo completar la autenticacion.";
+
+  if (/invalid login credentials/i.test(rawMessage)) {
+    return "Correo o contraseña incorrectos. Revisa los datos e intenta de nuevo.";
+  }
+
+  if (/email not confirmed/i.test(rawMessage)) {
+    return "Tu correo aun no ha sido confirmado. Revisa tu bandeja de entrada y luego inicia sesión.";
+  }
+
+  if (/user already registered/i.test(rawMessage)) {
+    return "Ese correo ya está registrado. Intenta iniciar sesión en lugar de crear otra cuenta.";
+  }
+
+  if (/password should be at least/i.test(rawMessage)) {
+    return "La contraseña debe tener al menos 6 caracteres.";
+  }
+
+  return rawMessage;
 }
 
 function GoogleIcon() {
@@ -122,7 +147,6 @@ interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
-  const [isMobile, setIsMobile] = useState(false);
   const [showAndroidBrowserHint, setShowAndroidBrowserHint] = useState(false);
   const { t } = useLanguage();
   const [email, setEmail] = useState("");
@@ -132,43 +156,75 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const primaryActionLabel = useMemo(
+    () => (isLogin ? "Entrar" : "Registrarme"),
+    [isLogin]
+  );
+
+  const handleFieldFocus = (event: FocusEvent<HTMLInputElement>) => {
+    window.setTimeout(() => {
+      event.currentTarget.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+    }, 180);
+  };
+
+  const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
     setRememberAccountPreference(rememberAccount);
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail || !password) {
+      setLoading(false);
+      setError("Completa correo y contraseña para continuar.");
+      return;
+    }
+
+    if (!isLogin && password.length < 6) {
+      setLoading(false);
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
           password,
         });
-        if (error) throw error;
+
+        if (signInError) throw signInError;
+        onStart?.();
+        return;
+      }
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          emailRedirectTo: getAuthRedirectUrl(),
+        },
+      });
+
+      if (signUpError) throw signUpError;
+
+      if (data.session) {
         onStart?.();
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: getOAuthRedirectUrl(),
-          },
-        });
-        if (error) throw error;
-        const { data: confirmData, error: confirmError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (!confirmError && confirmData.user) {
-          onStart?.();
-        } else {
-          setError("Cuenta creada. Por favor inicia sesión.");
-          setIsLogin(true);
-        }
+        setPassword("");
+        setIsLogin(true);
+        setNotice("Cuenta creada. Si el proyecto exige confirmación por correo, revisa tu email antes de iniciar sesión.");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (authError) {
+      setError(getAuthErrorMessage(authError));
     } finally {
       setLoading(false);
     }
@@ -177,86 +233,77 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const handleGoogleAuth = async () => {
     setGoogleLoading(true);
     setError("");
+    setNotice("");
     setRememberAccountPreference(rememberAccount);
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: getOAuthRedirectUrl(),
+          redirectTo: getAuthRedirectUrl(),
           queryParams: {
             access_type: "offline",
             prompt: "select_account",
           },
         },
       });
-      if (error) throw error;
-    } catch (err: any) {
-      console.error("Google OAuth error:", err);
-      setError(err.message);
+
+      if (oauthError) throw oauthError;
+    } catch (authError) {
+      console.error("Google OAuth error:", authError);
+      setError(getAuthErrorMessage(authError));
       setGoogleLoading(false);
     }
   };
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    const isEmbeddedAndroidBrowser = isAndroidEmbeddedBrowser();
-
-    checkMobile();
-    setShowAndroidBrowserHint(isEmbeddedAndroidBrowser);
-    window.addEventListener('resize', checkMobile);
+    const embeddedAndroidBrowser = isAndroidEmbeddedBrowser();
+    setShowAndroidBrowserHint(embeddedAndroidBrowser);
 
     const oauthError = readOAuthErrorFromUrl();
     if (oauthError) {
       setError(
-        isEmbeddedAndroidBrowser
+        embeddedAndroidBrowser
           ? `${oauthError}. Si estas en un navegador embebido de Android, abre la app directamente en Chrome e intenta de nuevo.`
           : oauthError
       );
       clearOAuthErrorFromUrl();
     }
-
-    const setHeight = () => {
-      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-    };
-    setHeight();
-    window.addEventListener('resize', setHeight);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      window.removeEventListener('resize', setHeight);
-    };
   }, []);
 
   return (
     <div
-      className="relative flex flex-col items-center justify-center overflow-hidden bg-slate-950"
-      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+      className="relative flex min-h-screen flex-col overflow-x-hidden overflow-y-auto bg-slate-950"
+      style={{
+        minHeight: "var(--app-height, 100dvh)",
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+      }}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 pointer-events-none z-0" />
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.1),transparent_50%)] z-0" />
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,163,255,0.1),transparent_50%)] z-0" />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900" />
+      <div className="absolute top-0 left-0 z-0 h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.1),transparent_50%)]" />
+      <div className="absolute top-0 left-0 z-0 h-full w-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,163,255,0.1),transparent_50%)]" />
 
-      <main className="relative z-10 w-full px-4 py-5 sm:px-6 flex flex-col items-center text-center overflow-y-auto">
+      <main className="relative z-10 flex w-full flex-1 flex-col items-center justify-center px-4 py-6 text-center sm:px-6 sm:py-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full"
+          className="w-full max-w-md"
         >
-          <div className="mb-6 md:mb-8 flex flex-col items-center">
-            <div className="mb-5 md:mb-6">
+          <div className="mb-6 flex flex-col items-center sm:mb-8">
+            <div className="mb-5 sm:mb-6">
               <MtaLogo />
             </div>
-            <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight text-white leading-tight">
-              My <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Travel Assistance</span>
+            <h1 className="mb-2 text-3xl leading-tight font-extrabold tracking-tight text-white md:text-4xl">
+              My <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Travel Assistance</span>
             </h1>
-            <p className="text-gray-400 text-sm">{t('welcome.subtitle')}</p>
+            <p className="text-sm text-gray-400">{t("welcome.subtitle")}</p>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 md:p-7 shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-6 text-center">Continúa tu viaje</h2>
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl md:p-8">
+            <h2 className="mb-6 text-center text-xl font-bold text-white">Continúa tu viaje</h2>
 
-            <label className="mb-5 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left active:scale-[0.99] transition">
+            <label className="mb-5 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left transition active:scale-[0.99]">
               <span>
                 <span className="block text-sm font-semibold text-white">Recordar cuenta</span>
                 <span className="block text-xs text-gray-400">Mantener la sesión abierta en este dispositivo.</span>
@@ -278,9 +325,9 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
                 type="button"
                 onClick={handleGoogleAuth}
                 disabled={googleLoading || loading}
-                className="w-full min-h-12 rounded-xl border border-white/15 bg-white text-slate-900 font-semibold hover:bg-slate-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white font-semibold text-slate-900 transition-all hover:bg-slate-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {googleLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-700" /> : <GoogleIcon />}
+                {googleLoading ? <Loader2 className="h-5 w-5 animate-spin text-slate-700" /> : <GoogleIcon />}
                 <span>Continuar con Google</span>
               </button>
 
@@ -292,51 +339,75 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
               )}
             </div>
 
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-gray-400 text-xs">O con email</span>
-              <div className="flex-1 h-px bg-white/10" />
+            <div className="mb-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs text-gray-400">O con email</span>
+              <div className="h-px flex-1 bg-white/10" />
             </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
-              <div className="text-left mb-4">
-                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                  {isLogin ? <LogIn className="w-4 h-4 text-blue-400" /> : <UserPlus className="w-4 h-4 text-cyan-400" />}
+              <div className="mb-4 text-left">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                  {isLogin ? <LogIn className="h-4 w-4 text-blue-400" /> : <UserPlus className="h-4 w-4 text-cyan-400" />}
                   {isLogin ? "Iniciar Sesión" : "Crear Cuenta"}
                 </h3>
               </div>
 
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+              <div className="group relative">
+                <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-blue-400" />
                 <input
                   required
                   type="email"
                   placeholder="Email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                  onChange={(event) => setEmail(event.target.value)}
+                  onFocus={handleFieldFocus}
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
+                  enterKeyHint="next"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/50 py-3.5 pl-12 pr-4 text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 />
               </div>
 
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+              <div className="group relative">
+                <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-blue-400" />
                 <input
                   required
                   type="password"
                   placeholder="Password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                  onChange={(event) => setPassword(event.target.value)}
+                  onFocus={handleFieldFocus}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="go"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/50 py-3.5 pl-12 pr-4 text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 />
               </div>
 
               <AnimatePresence>
+                {notice && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="rounded-lg bg-emerald-400/10 p-3 text-left text-xs font-medium text-emerald-200"
+                  >
+                    {notice}
+                  </motion.p>
+                )}
+
                 {error && (
                   <motion.p
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="text-red-400 text-xs font-medium bg-red-400/10 p-3 rounded-lg text-left"
+                    className="rounded-lg bg-red-400/10 p-3 text-left text-xs font-medium text-red-400"
                   >
                     {error}
                   </motion.p>
@@ -345,20 +416,24 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
               <button
                 type="submit"
-                disabled={loading || googleLoading}
-                className="w-full py-4 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white rounded-xl font-bold text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={loading || googleLoading || !email.trim() || !password}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 py-4 text-lg font-bold text-white shadow-xl shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (isLogin ? "Entrar" : "Registrarme")}
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : primaryActionLabel}
               </button>
             </form>
 
-            <div className="mt-6 pt-5 border-t border-white/5 flex flex-col gap-4 text-sm">
+            <div className="mt-8 flex flex-col gap-4 border-t border-white/5 pt-6 text-sm">
               <p className="text-gray-500">
                 {isLogin ? "¿No tienes cuenta?" : "¿Ya eres viajero?"}
                 <button
                   type="button"
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-blue-400 font-bold ml-2 hover:underline"
+                  onClick={() => {
+                    setIsLogin((prev) => !prev);
+                    setError("");
+                    setNotice("");
+                  }}
+                  className="ml-2 font-bold text-blue-400 hover:underline"
                 >
                   {isLogin ? "Regístrate aquí" : "Inicia sesión"}
                 </button>

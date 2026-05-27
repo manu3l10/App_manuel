@@ -24,8 +24,8 @@ Para restringir origenes hay que configurar los dominios permitidos en Supabase 
 
 Dominios permitidos para MTA:
 
-- `https://mta-oficial.vercel.app` como dominio principal de produccion
-- `https://mta-oficial.vercel.app/` para redirects de Auth con slash final
+- `https://appmta.vercel.app` como dominio principal de produccion
+- `https://appmta.vercel.app/` para redirects de Auth con slash final
 - `http://localhost:5173` solo para desarrollo local
 
 No se deben permitir comodines como `*` en produccion.

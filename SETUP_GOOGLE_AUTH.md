@@ -26,15 +26,15 @@
 6. Añade los **Authorized JavaScript origins**:
    ```
    http://localhost:5173
-   https://mta-oficial.vercel.app
+   https://appmta.vercel.app
    ```
    (Este es el dominio oficial de producción de MTA)
 
 7. Añade los **Authorized redirect URIs**:
    ```
-   https://wxrxagmxrmpfdltrclld.supabase.co/auth/v1/callback
+   https://<tu-project-ref>.supabase.co/auth/v1/callback
    ```
-   (Reemplaza el subdomain con el tuyo de Supabase si es diferente)
+   (Usa exactamente el dominio configurado en `VITE_SUPABASE_URL`)
 
 8. Copia el **Client ID** (lo necesitarás)
 9. Descarga el archivo JSON como referencia
@@ -53,12 +53,12 @@
 1. En **Authentication** > **URL Configuration**
 2. Agrega bajo **Authorized redirect URLs**:
    - `http://localhost:5173` (desarrollo local)
-   - `https://mta-oficial.vercel.app` (producción)
-   - `https://mta-oficial.vercel.app/` (producción con slash final)
+   - `https://appmta.vercel.app` (producción)
+   - `https://appmta.vercel.app/` (producción con slash final)
 
 3. Agrega bajo **Site URL**:
    - Para desarrollo: `http://localhost:5173`
-   - Para producción: `https://mta-oficial.vercel.app`
+   - Para producción: `https://appmta.vercel.app`
 
 ### 6. Probar el login
 

@@ -33,6 +33,19 @@
             ]
         }
     ],
+    "redirects": [
+        {
+            "source": "/(.*)",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "appmanuel.vercel.app"
+                }
+            ],
+            "destination": "https://appmta.vercel.app/$1",
+            "permanent": true
+        }
+    ],
     "rewrites": [
         {
             "source": "/((?!api/).*)",
