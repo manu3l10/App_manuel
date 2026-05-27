@@ -161,8 +161,7 @@ export function Home() {
   }
 
   if (!user) {
-    // Temporary bypass for LLM testing
-    // return <WelcomeScreen />;
+    return <WelcomeScreen />;
   }
 
   return (
