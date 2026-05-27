@@ -48,6 +48,30 @@ type ChatChangeRequest = {
   endDate: string;
 };
 
+const AGENT_API_URL = import.meta.env.VITE_AGENT_API_URL?.trim() || "/api/chat";
+const API_BASE_URL = AGENT_API_URL.replace(/\/api\/chat\/?$/, "");
+const buildApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+const buildAirbnbSearchUrl = (location: string, checkin?: string, checkout?: string) => {
+  const slug = (location || "Colombia")
+    .replace(/,\s*/g, "--")
+    .replace(/\s+/g, "-");
+  const url = new URL(`https://www.airbnb.com/s/${encodeURIComponent(slug)}/homes`);
+
+  if (checkin) url.searchParams.set("checkin", checkin);
+  if (checkout) url.searchParams.set("checkout", checkout);
+  url.searchParams.set("adults", "1");
+
+  return url.toString();
+};
+
+const normalizeAirbnbUrl = (rawUrl: unknown, args: { location?: string; checkin?: string; checkout?: string }) => {
+  if (typeof rawUrl === "string" && rawUrl.startsWith("https://")) return rawUrl;
+  if (typeof rawUrl === "string" && rawUrl.startsWith("/")) return `https://www.airbnb.com${rawUrl}`;
+
+  return buildAirbnbSearchUrl(args.location || "Colombia", args.checkin, args.checkout);
+};
+
 export function AIChat() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -759,7 +783,7 @@ export function AIChat() {
 
     const runChatLoop = async (history: any[]) => {
       try {
-        const res = await fetch('http://localhost:3001/api/chat', {
+        const res = await fetch(AGENT_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: history })
@@ -784,7 +808,7 @@ export function AIChat() {
               
               if (name === "search_flights") {
                  try {
-                   const flightsRes = await fetch('http://localhost:3001/api/flights/search', {
+                   const flightsRes = await fetch(buildApiUrl('/api/flights/search'), {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({
@@ -876,7 +900,7 @@ export function AIChat() {
               
               else if (name === "search_airbnb_prices") {
                  try {
-                   const airbnbRes = await fetch('http://localhost:3001/api/airbnb/search', {
+                   const airbnbRes = await fetch(buildApiUrl('/api/airbnb/search'), {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ location: args.location, checkin: args.checkin, checkout: args.checkout })
@@ -895,6 +919,7 @@ export function AIChat() {
                      const cardNode = (
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
                          {results.map((r: any) => {
+                            const airbnbUrl = normalizeAirbnbUrl(r.url, args);
                             const desc = typeof r.demandStayListing?.description === 'string' ? r.demandStayListing.description : "Alojamiento increíble";
                             const loc = typeof r.structuredContent?.primaryLine?.body === 'string' ? r.structuredContent.primaryLine.body : args.location;
                             const priceLabel = r.structuredDisplayPrice?.primaryLine?.accessibilityLabel || r.structuredDisplayPrice?.secondaryLine?.accessibilityLabel || "Ver precio";
@@ -939,7 +964,7 @@ export function AIChat() {
                                 />
                                 <div className="flex gap-2 p-1">
                                   <a 
-                                    href={r.url} 
+                                    href={airbnbUrl} 
                                     target="_blank" 
                                     rel="noreferrer" 
                                     className="flex-1 text-center bg-white/10 hover:bg-white/15 border border-white/20 text-white py-2 rounded-lg text-xs font-medium transition-colors"

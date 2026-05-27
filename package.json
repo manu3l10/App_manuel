@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite"
+    "build": "npm --prefix mcp-server-airbnb install && npm --prefix mcp-server-airbnb run build && vite build",
+    "dev": "vite",
+    "dev:api": "node --env-file=.env server.js"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -52,6 +53,10 @@
     "embla-carousel-react": "8.6.0",
     "express": "^5.2.1",
     "groq-sdk": "^1.2.0",
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "cheerio": "^1.0.0",
+    "node-fetch": "^3.3.2",
+    "robots-parser": "^3.0.1",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
     "motion": "12.23.24",
