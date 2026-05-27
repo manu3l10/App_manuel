@@ -5,10 +5,10 @@ import { useLocation, useNavigate } from "react-router";
 import { ReactNode } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { ItineraryCard } from "./ItineraryCard";
 import { HotelCard } from "./HotelCard";
 import { supabase } from "../../lib/supabase";
-import { HotelStay, ItineraryDetails, getItineraryDetails, getLastTripId, saveItineraryDetails, setLastTripId } from "../../lib/itineraryDetails";
+import { deleteItineraryDetails, HotelStay, ItineraryDetails, getItineraryDetails, getLastTripId, saveItineraryDetails, setLastTripId } from "../../lib/itineraryDetails";
+import { AgentAction, AgentChatResponse, AgentFlightOffer, AgentHotelResult, AgentTrip, sendAgentChat } from "../../lib/agentApi";
 
 type ChatCardPayload = {
   destination: string;
@@ -48,29 +48,22 @@ type ChatChangeRequest = {
   endDate: string;
 };
 
-const AGENT_API_URL = import.meta.env.VITE_AGENT_API_URL?.trim() || "/api/chat";
-const API_BASE_URL = AGENT_API_URL.replace(/\/api\/chat\/?$/, "");
-const buildApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+function syncTripDetailsWithUpdatedTrip(trip: AgentTrip) {
+  const previousDetails = getItineraryDetails(trip.id);
+  if (!previousDetails) return;
 
-const buildAirbnbSearchUrl = (location: string, checkin?: string, checkout?: string) => {
-  const slug = (location || "Colombia")
-    .replace(/,\s*/g, "--")
-    .replace(/\s+/g, "-");
-  const url = new URL(`https://www.airbnb.com/s/${encodeURIComponent(slug)}/homes`);
-
-  if (checkin) url.searchParams.set("checkin", checkin);
-  if (checkout) url.searchParams.set("checkout", checkout);
-  url.searchParams.set("adults", "1");
-
-  return url.toString();
-};
-
-const normalizeAirbnbUrl = (rawUrl: unknown, args: { location?: string; checkin?: string; checkout?: string }) => {
-  if (typeof rawUrl === "string" && rawUrl.startsWith("https://")) return rawUrl;
-  if (typeof rawUrl === "string" && rawUrl.startsWith("/")) return `https://www.airbnb.com${rawUrl}`;
-
-  return buildAirbnbSearchUrl(args.location || "Colombia", args.checkin, args.checkout);
-};
+  saveItineraryDetails(trip.id, {
+    ...previousDetails,
+    hotel: previousDetails.hotel
+      ? {
+          ...previousDetails.hotel,
+          location: trip.destination || previousDetails.hotel.location,
+          checkIn: trip.start_date,
+          checkOut: trip.end_date,
+        }
+      : previousDetails.hotel,
+  });
+}
 
 export function AIChat() {
   const navigate = useNavigate();
@@ -87,14 +80,28 @@ export function AIChat() {
   ]);
   const [savingProposal, setSavingProposal] = useState(false);
   const [savingHotel, setSavingHotel] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const pendingChatActionRef = useRef(false);
   const completedChatActionsRef = useRef<Set<string>>(new Set());
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const suggestions = [
     lang === "es"
       ? "Viajar al Eje Cafetero"
       : "Travel to the Coffee Region",
   ];
+
+  const buildInstantFrontendReply = (rawInput: string): ChatMessageItem | null => {
+    const normalized = rawInput.trim().toLowerCase();
+    if (/^(hola|hello|hi|buenas|holi|hey)\b/.test(normalized)) {
+      return {
+        type: "ai",
+        content: "Hola. Puedo ayudarte a buscar vuelos y alojamientos. Dime destino y fechas, por ejemplo: Bogota a Medellin del 10 al 15 de junio.",
+      };
+    }
+    return null;
+  };
 
   const buildEjeCafeteroFlightsPayload = (startDate: string, endDate: string): ChatCardPayload => ({
     destination: "Eje Cafetero (Salento, Filandia y Pereira)",
@@ -373,47 +380,36 @@ export function AIChat() {
   };
 
   const saveHotelOptionForTrip = (request: ChatChangeRequest, option: HotelOption) => {
-    // At click time, resolve the real tripId (may have been created AFTER the card rendered)
-    const resolvedTripId = request.tripId !== "temp_trip" ? request.tripId : (getLastTripId() ?? request.tripId);
-    const actionKey = `change-hotel:${resolvedTripId}:${option.name}`;
-    void runChatActionOnce(actionKey, () => {
-      const previousDetails = getItineraryDetails(resolvedTripId) ?? { flights: [], hotel: null };
-      const hotel: HotelStay = {
-        name: option.name,
-        location: option.location,
-        checkIn: request.startDate,
-        checkOut: request.endDate,
-        pricePerNight: option.pricePerNight,
-        image: option.image,
-      };
-      saveItineraryDetails(resolvedTripId, {
-        ...previousDetails,
-        hotel,
-      });
-      setLastTripId(resolvedTripId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "ai",
-          content: `🏨 Listo. Guardé el hotel "${option.name}" en tu itinerario. Ya aparece en el calendario.`,
-          card: (
-            <div className="flex gap-3">
-              <button
-                onClick={() => navigate("/itineraries")}
-                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-              >
-                Ver mis viajes
-              </button>
-              <button
-                onClick={() => navigate("/calendar")}
-                className="flex-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-              >
-                Ver calendario
-              </button>
-            </div>
-          ),
-        },
-      ]);
+    void runChatActionOnce(`change-hotel:${request.tripId}`, () => {
+    const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
+    const hotel: HotelStay = {
+      name: option.name,
+      location: option.location,
+      checkIn: request.startDate,
+      checkOut: request.endDate,
+      pricePerNight: option.pricePerNight,
+      image: option.image,
+    };
+    saveItineraryDetails(request.tripId, {
+      ...previousDetails,
+      hotel,
+    });
+    setLastTripId(request.tripId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "ai",
+        content: `Listo. Cambié el hotel a "${option.name}" en tu itinerario.`,
+        card: (
+          <button
+            onClick={() => navigate("/itineraries")}
+            className="w-full md:w-auto bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Ver itinerario actualizado
+          </button>
+        ),
+      },
+    ]);
     });
   };
 
@@ -621,21 +617,37 @@ export function AIChat() {
       ...prev,
       {
         type: "ai",
-        content: `✈️ ¡Vuelos guardados en tu itinerario! Si quieres agregar hotel, selecciona una opción de las tarjetas de alojamiento que aparecen arriba.`,
+        content: "Listo. Guardé los vuelos en Mis itinerarios. ¿Quieres que también agendemos hotel para esas fechas?",
         card: (
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate("/itineraries")}
-              className="flex-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-            >
-              Ver mis viajes
-            </button>
+          <div className="space-y-3">
             <button
               onClick={() => navigate("/calendar")}
-              className="flex-1 bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
+              className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
             >
-              Ver calendario
+              Ver Calendario
             </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() =>
+                  showHotelOptionsForTrip({
+                    type: "hotel",
+                    tripId: insertedTrip.id,
+                    destination: payload.destination,
+                    startDate: payload.startDate,
+                    endDate: payload.endDate,
+                  })
+                }
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+              >
+                Sí, agendar hotel
+              </button>
+              <button
+                onClick={() => declineHotelsForNow(`decline-hotels:${insertedTrip.id}`)}
+                className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
+              >
+                No, por ahora
+              </button>
+            </div>
           </div>
         ),
       },
@@ -760,312 +772,243 @@ export function AIChat() {
     pendingChatActionRef.current = false;
   };
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const buildAgentFlightCards = (offers: AgentFlightOffer[]) => (
+    <div className="space-y-4">
+      {offers.map((offer, index) => (
+        <div key={offer.id} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">
+              {offer.owner || `Opcion ${index + 1}`}
+            </h4>
+            <span className="text-xs text-gray-300">{offer.budget}</span>
+          </div>
+          {offer.flights.map((flight) => (
+            <div key={`${offer.id}-${flight.date}-${flight.route}-${flight.time}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3">
+              <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
+              <div>
+                <p className="text-sm font-medium">{flight.route}</p>
+                <p className="text-xs text-gray-300">
+                  {flight.date} • {flight.airline} • {flight.time} • {flight.price}
+                </p>
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={() => saveProposalToItineraries(offer.details)}
+            disabled={savingProposal}
+            className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {savingProposal ? "Guardando..." : "Guardar esta opcion"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 
-    const userMessage = { type: "user" as const, content: input };
+  const buildAgentHotelCards = (hotels: AgentHotelResult[]) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {hotels.map((hotel) => (
+        <div key={`${hotel.name}-${hotel.location}`} className="space-y-3">
+          <HotelCard
+            name={hotel.name}
+            location={hotel.location}
+            rating={hotel.rating}
+            price={hotel.pricePerNight}
+            image={hotel.image}
+            amenities={hotel.amenities}
+          />
+          <div className="bg-white/10 rounded-xl border border-white/20 p-3 text-xs text-gray-200 space-y-1">
+            {hotel.checkIn && hotel.checkOut && <p>Estadia: {hotel.checkIn} al {hotel.checkOut}</p>}
+            {hotel.highlights.map((item) => (
+              <p key={item}>• {item}</p>
+            ))}
+          </div>
+          {hotel.link ? (
+            <a
+              href={hotel.link}
+              target="_blank"
+              rel="noreferrer"
+              className="block w-full text-center bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+            >
+              Ver alojamiento
+            </a>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+
+  const buildAgentCard = (response: AgentChatResponse) => {
+    const flights = response.data?.flights || [];
+    const hotels = response.data?.hotels || [];
+    const actions = response.data?.actions || [];
+
+    if (!flights.length && !hotels.length && !actions.length) return undefined;
+
+    return (
+      <div className="space-y-4">
+        {flights.length ? buildAgentFlightCards(flights) : null}
+        {hotels.length ? buildAgentHotelCards(hotels) : null}
+        {actions.length ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <button
+              onClick={() => navigate("/calendar")}
+              className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-shadow hover:shadow-lg rounded-lg"
+            >
+              Ver calendario
+            </button>
+            <button
+              onClick={() => navigate("/itineraries")}
+              className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/15"
+            >
+              Ver itinerarios
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const applyAgentActions = (actions: AgentAction[]) => {
+    actions.forEach((action) => {
+      if (action.type === "trip_cancelled") {
+        deleteItineraryDetails(action.tripId);
+        return;
+      }
+
+      if (action.type === "trip_updated") {
+        syncTripDetailsWithUpdatedTrip(action.trip);
+        setLastTripId(action.trip.id);
+      }
+    });
+  };
+
+  const buildDemoFallbackResponse = (rawInput: string): ChatMessageItem => {
+    const lowerInput = rawInput.toLowerCase();
+    const isEjePrompt = lowerInput.includes("eje cafetero") || lowerInput.includes("salento") || lowerInput.includes("cafetero");
+    const isHotelPrompt =
+      lowerInput.includes("hotel") ||
+      lowerInput.includes("hote") ||
+      lowerInput.includes("hosped") ||
+      lowerInput.includes("quedar");
+    const aiResponse: ChatMessageItem = {
+      type: "ai",
+      content: t('chat.aiResponsePrefix'),
+    };
+
+    if (isHotelPrompt) {
+      const lastTripId = getLastTripId();
+      const lastTripDetails = lastTripId ? getItineraryDetails(lastTripId) : null;
+      aiResponse.content = lastTripDetails?.flights?.length
+        ? "Claro. ¿Quieres que también agendemos hotel para las fechas de tu último viaje al Eje Cafetero?"
+        : "Para agendar hotel primero necesito que aceptes vuelos del Eje Cafetero y sus fechas.";
+      aiResponse.card = lastTripDetails?.flights?.length && lastTripId ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button
+            onClick={() =>
+              showHotelOptionsForTrip({
+                type: "hotel",
+                tripId: lastTripId,
+                destination: "Eje Cafetero (Salento, Filandia y Pereira)",
+                startDate: lastTripDetails.flights[0]?.date ?? "",
+                endDate: lastTripDetails.flights[lastTripDetails.flights.length - 1]?.date ?? "",
+              })
+            }
+            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Sí, agendar hotel
+          </button>
+          <button
+            onClick={() => declineHotelsForNow(`decline-hotels:${lastTripId}`)}
+            className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
+          >
+            No, por ahora
+          </button>
+        </div>
+      ) : undefined;
+      return aiResponse;
+    }
+
+    if (isEjePrompt) {
+      aiResponse.content = "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?";
+      aiResponse.card = <DatePickerCard onConfirm={showFlightOptionsForDates} />;
+      return aiResponse;
+    }
+
+    aiResponse.content = "Hola, solo puedo agendar viajes al Eje Cafetero por el momento.";
+    aiResponse.card = (
+      <button
+        onClick={() => {
+          void runChatActionOnce("start-eje-flow", () => {
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "user",
+                content: "Quiero viajar al Eje Cafetero",
+              },
+              {
+                type: "ai",
+                content: "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?",
+                card: <DatePickerCard onConfirm={showFlightOptionsForDates} />,
+              },
+            ]);
+          });
+        }}
+        className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+      >
+        Agendar viaje al Eje Cafetero
+      </button>
+    );
+    return aiResponse;
+  };
+
+  const handleSend = async () => {
+    const trimmedInput = input.trim();
+    if (!trimmedInput || sendingMessage) return;
+
+    const userMessage = { type: "user", content: trimmedInput };
     setMessages((prev) => [...prev, userMessage]);
-    
-    const currentInput = input;
     setInput("");
 
-    // Set up chat history for Groq
-    let chatHistory = [
-      { 
-        role: "system", 
-        content: "Eres un asistente de viajes avanzado enfocado en planificar viajes en Colombia. Tu tarea principal es ayudar a los usuarios con sus vuelos y alojamientos. Tienes acceso a herramientas para buscar vuelos en tiempo real usando Duffel (search_flights), alojamientos reales en Airbnb (search_airbnb_prices) y modificar viajes existentes en la base de datos Supabase (update_trip_in_supabase). Cuando el usuario te pida ir a un destino en Colombia con fechas específicas, debes buscar tanto vuelos como alojamientos (Airbnb) llamando a ambas herramientas. Si el usuario no te da una ciudad de origen para los vuelos, asume Bogotá (BOG) como origen predeterminado. Siempre asume el año 2026 para las fechas de viaje. Presenta un resumen cordial y deja que las tarjetas del sistema rendericen los detalles de vuelos y alojamientos. Responde siempre en español." 
-      },
-      ...messages.map(m => ({ role: m.type === "ai" ? "assistant" : "user", content: m.content || "" })),
-      { role: "user", content: currentInput }
-    ];
+    const instantFrontendReply = buildInstantFrontendReply(trimmedInput);
+    if (instantFrontendReply) {
+      setMessages((prev) => [...prev, instantFrontendReply]);
+      return;
+    }
 
-    setMessages(prev => [...prev, { type: "ai", content: "Pensando..." }]);
+    setSendingMessage(true);
 
-    const runChatLoop = async (history: any[]) => {
-      try {
-        const res = await fetch(AGENT_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history })
-        });
-        const msg = await res.json();
-        
-        if (msg.tool_calls) {
-           let newHistory = [...history, msg];
-           
-           const pendingOutputs: { role: string, tool_call_id: string, name: string, content: string }[] = [];
-           const newAiMessages: ChatMessageItem[] = [];
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-           // Let user know we are searching
-           setMessages(prev => [
-             ...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final..."),
-             { type: "ai", content: "Buscando información de vuelos y alojamientos..." }
-           ]);
+      const conversation = [
+        ...messages.map((message) => ({
+          role: message.type === "user" ? "user" as const : "assistant" as const,
+          content: message.content,
+        })),
+        { role: "user" as const, content: trimmedInput },
+      ];
 
-           for (const tool of msg.tool_calls) {
-              const name = tool.function.name;
-              const args = JSON.parse(tool.function.arguments);
-              
-              if (name === "search_flights") {
-                 try {
-                   const flightsRes = await fetch(buildApiUrl('/api/flights/search'), {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({
-                       origin_iata: args.origin_iata,
-                       destination_iata: args.destination_iata,
-                       departure_date: args.departure_date,
-                       return_date: args.return_date,
-                       adults: args.adults
-                     })
-                   });
-                   const flightsData = await flightsRes.json();
-                   const results = flightsData.searchResults || [];
-                   
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify(results)
-                   });
-
-                   if (results.length > 0) {
-                     const cardNode = (
-                       <div className="space-y-4 max-w-xl">
-                         {results.map((option: any) => (
-                           <div key={option.label} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3 shadow-xl">
-                             <div className="flex items-center justify-between gap-3">
-                               <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">{option.label}</h4>
-                               <span className="text-xs text-gray-300 font-mono">{option.budget}</span>
-                             </div>
-                             {option.flights.map((flight: any, fIdx: number) => (
-                               <div key={`${option.label}-${fIdx}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3 border border-white/5">
-                                 <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
-                                 <div className="flex-1">
-                                   <p className="text-sm font-medium">{flight.route}</p>
-                                   <p className="text-xs text-gray-300 mt-0.5">
-                                     {flight.date} • {flight.airline} • {flight.time}
-                                   </p>
-                                 </div>
-                               </div>
-                             ))}
-                             <button
-                               onClick={() =>
-                                 saveProposalToItineraries({
-                                   destination: `${args.destination_iata} (Duffel)`,
-                                   startDate: args.departure_date,
-                                   endDate: args.return_date || args.departure_date,
-                                   budget: option.budget,
-                                   details: {
-                                     flights: option.flights,
-                                     hotel: null,
-                                   },
-                                 })
-                               }
-                               disabled={savingProposal}
-                               className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                             >
-                               {savingProposal ? "Guardando..." : "Aceptar estos vuelos"}
-                             </button>
-                           </div>
-                         ))}
-                       </div>
-                     );
-                     
-                     newAiMessages.push({
-                       type: "ai",
-                       content: `✈️ Encontré estas opciones de vuelos reales en Duffel para ir a ${args.destination_iata}:`,
-                       card: cardNode
-                     });
-                   } else {
-                     newAiMessages.push({
-                       type: "ai",
-                       content: `✈️ No encontré vuelos disponibles de ${args.origin_iata || 'BOG'} a ${args.destination_iata} en las fechas seleccionadas.`
-                     });
-                   }
-                 } catch (fErr) {
-                   console.error("Flight search failed:", fErr);
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify({ error: String(fErr) })
-                   });
-                   newAiMessages.push({
-                     type: "ai",
-                     content: `✈️ Hubo un error al buscar vuelos: ${fErr instanceof Error ? fErr.message : String(fErr)}`
-                   });
-                 }
-              }
-              
-              else if (name === "search_airbnb_prices") {
-                 try {
-                   const airbnbRes = await fetch(buildApiUrl('/api/airbnb/search'), {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ location: args.location, checkin: args.checkin, checkout: args.checkout })
-                   });
-                   const airbnbData = await airbnbRes.json();
-                   const results = airbnbData.searchResults?.slice(0, 3) || [];
-                   
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify(results)
-                   });
-
-                   if (results.length > 0) {
-                     const cardNode = (
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-                         {results.map((r: any) => {
-                            const airbnbUrl = normalizeAirbnbUrl(r.url, args);
-                            const desc = typeof r.demandStayListing?.description === 'string' ? r.demandStayListing.description : "Alojamiento increíble";
-                            const loc = typeof r.structuredContent?.primaryLine?.body === 'string' ? r.structuredContent.primaryLine.body : args.location;
-                            const priceLabel = r.structuredDisplayPrice?.primaryLine?.accessibilityLabel || r.structuredDisplayPrice?.secondaryLine?.accessibilityLabel || "Ver precio";
-                            
-                            let priceStr = "$150.000 COP";
-                            const match = priceLabel.match(/\$[0-9,.]+/);
-                            if (match) {
-                              priceStr = match[0];
-                            } else {
-                              priceStr = priceLabel;
-                            }
-
-                            const hotelImage = "https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080";
-
-                            const hotelOption: HotelOption = {
-                              name: desc.split(" in ")[0].slice(0, 45),
-                              location: loc,
-                              rating: 4.8,
-                              pricePerNight: priceStr,
-                              image: hotelImage,
-                              amenities: ["wifi", "breakfast"],
-                              highlights: ["Excelente ubicación", "Wifi de alta velocidad", priceLabel]
-                            };
-
-                            const tripRequest: ChatChangeRequest = {
-                              type: "hotel",
-                              tripId: getLastTripId() || "temp_trip",
-                              destination: args.location,
-                              startDate: args.checkin,
-                              endDate: args.checkout
-                            };
-
-                            return (
-                              <div key={r.id} className="space-y-3 bg-white/5 border border-white/10 rounded-2xl p-2 hover:bg-white/10 transition-colors shadow-lg">
-                                <HotelCard
-                                  name={hotelOption.name}
-                                  location={hotelOption.location}
-                                  rating={hotelOption.rating}
-                                  price={hotelOption.pricePerNight}
-                                  image={hotelOption.image}
-                                  amenities={hotelOption.amenities}
-                                />
-                                <div className="flex gap-2 p-1">
-                                  <a 
-                                    href={airbnbUrl} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="flex-1 text-center bg-white/10 hover:bg-white/15 border border-white/20 text-white py-2 rounded-lg text-xs font-medium transition-colors"
-                                  >
-                                    Ver en Airbnb
-                                  </a>
-                                  <button
-                                    onClick={() => saveHotelOptionForTrip(tripRequest, hotelOption)}
-                                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 rounded-lg text-xs font-medium hover:shadow-lg transition-all"
-                                  >
-                                    Seleccionar
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                         })}
-                       </div>
-                     );
-                     
-                     newAiMessages.push({
-                       type: "ai",
-                       content: `🏨 Encontré estos alojamientos recomendados en Airbnb para ${args.location}:`,
-                       card: cardNode
-                     });
-                   } else {
-                     newAiMessages.push({
-                       type: "ai",
-                       content: `🏨 No encontré alojamientos en Airbnb para ${args.location} en las fechas especificadas.`
-                     });
-                   }
-                 } catch (aErr) {
-                   console.error("Airbnb search failed:", aErr);
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify({ error: String(aErr) })
-                   });
-                   newAiMessages.push({
-                     type: "ai",
-                     content: `🏨 Hubo un error al buscar alojamientos: ${aErr instanceof Error ? aErr.message : String(aErr)}`
-                   });
-                 }
-              }
-              
-              else if (name === "update_trip_in_supabase") {
-                 try {
-                   const updates: any = {};
-                   if (args.destination) updates.destination = args.destination;
-                   if (args.start_date) updates.start_date = args.start_date;
-                   if (args.end_date) updates.end_date = args.end_date;
-                   if (args.budget) updates.budget = args.budget;
-                   
-                   const { error } = await supabase.from('trips').update(updates).eq('id', args.trip_id);
-                   
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify({ success: !error, error: error?.message })
-                   });
-                   
-                   newAiMessages.push({
-                     type: "ai",
-                     content: error 
-                       ? `❌ Error al actualizar viaje: ${error.message}`
-                       : `✅ ¡Tu viaje ha sido actualizado con éxito!`
-                   });
-                 } catch (uErr) {
-                   console.error("Update trip failed:", uErr);
-                   pendingOutputs.push({
-                     role: "tool",
-                     tool_call_id: tool.id,
-                     name: name,
-                     content: JSON.stringify({ error: String(uErr) })
-                   });
-                 }
-              }
-           }
-
-           newHistory.push(...pendingOutputs);
-
-           setMessages(prev => {
-             const filtered = prev.filter(p => p.content !== "Buscando información de vuelos y alojamientos...");
-             return [...filtered, ...newAiMessages, { type: "ai", content: "Procesando respuesta final..." }];
-           });
-
-           await runChatLoop(newHistory);
-        } else if (msg.content) {
-           setMessages(prev => {
-             const filtered = prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final...");
-             return [...filtered, { type: "ai", content: msg.content }];
-           });
-        }
-      } catch(err) {
-        console.error(err);
-        setMessages(prev => [...prev.filter(p => p.content !== "Pensando..." && p.content !== "Procesando opciones..." && p.content !== "Procesando respuesta final..."), { type: "ai", content: "Hubo un error al comunicarme con el asistente de inteligencia artificial." }]);
-      }
-    };
-    
-    await runChatLoop(chatHistory);
+      const response = await sendAgentChat(conversation, {
+        accessToken: session?.access_token ?? null,
+      });
+      applyAgentActions(response.data?.actions || []);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "ai",
+          content: response.reply,
+          card: buildAgentCard(response),
+        },
+      ]);
+    } catch (error) {
+      console.error("Agent API unavailable, falling back to demo mode:", error);
+      setMessages((prev) => [...prev, buildDemoFallbackResponse(trimmedInput)]);
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -1073,8 +1016,36 @@ export function AIChat() {
     setTimeout(() => handleSend(), 100);
   };
 
+  const scrollComposerIntoView = () => {
+    window.setTimeout(() => {
+      inputRef.current?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+
+      const container = messagesContainerRef.current;
+      if (!container) return;
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 180);
+  };
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Chat Header - Smaller on mobile */}
       <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-b border-white/10 bg-slate-900/40 backdrop-blur-xl">
         <div className="flex items-center gap-2 md:gap-3">
@@ -1093,7 +1064,11 @@ export function AIChat() {
       </div>
 
       {/* Messages Area - Responsive padding */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4 md:px-6 md:py-6 md:space-y-6"
+        style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         {messages.map((message, index) => (
           <ChatMessage
             key={index}
@@ -1102,10 +1077,19 @@ export function AIChat() {
             card={message.card}
           />
         ))}
+        {sendingMessage ? (
+          <ChatMessage
+            type="ai"
+            content="Estoy buscando opciones para ti..."
+          />
+        ) : null}
       </div>
 
       {/* Input Area - Adjusted for mobile keyboards */}
-      <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-slate-900/40 backdrop-blur-xl">
+      <div
+        className="flex-shrink-0 border-t border-white/10 bg-slate-900/40 px-4 py-3 backdrop-blur-xl md:px-6 md:py-4"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         {/* Suggestions - Horizontal scroll on mobile */}
         <AnimatePresence>
           {messages.length <= 1 && (
@@ -1138,11 +1122,20 @@ export function AIChat() {
         {/* Input - More compact on mobile */}
         <div className="relative">
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            onFocus={scrollComposerIntoView}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             placeholder={t('chat.inputPlaceholder')}
+            autoComplete="off"
+            enterKeyHint="send"
             className="w-full pl-4 pr-24 md:pr-28 py-3.5 md:py-4 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white text-sm md:text-base placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
           />
 
@@ -1160,7 +1153,7 @@ export function AIChat() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || sendingMessage}
               className="p-2.5 md:p-3 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 rounded-lg md:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20"
               aria-label="Enviar"
             >
